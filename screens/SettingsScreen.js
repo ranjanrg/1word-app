@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 const { width } = Dimensions.get('window');
 
@@ -19,9 +19,9 @@ const SettingsScreen = ({ navigation }) => {
 
   const loadUserData = async () => {
     try {
-      const savedUsername = await AsyncStorage.getItem('username');
-      const savedWordsLearned = await AsyncStorage.getItem('totalWordsLearned');
-      const savedStreak = await AsyncStorage.getItem('currentStreak');
+      const savedUsername = await SecureStore.getItemAsync('username');
+      const savedWordsLearned = await SecureStore.getItemAsync('totalWordsLearned');
+      const savedStreak = await SecureStore.getItemAsync('currentStreak');
       
       setUsername(savedUsername || 'User');
       setWordsLearned(savedWordsLearned ? parseInt(savedWordsLearned) : 0);

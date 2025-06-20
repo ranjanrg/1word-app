@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 const STORAGE_KEYS = {
   USER_PROGRESS: 'user_progress',
@@ -33,7 +33,7 @@ class DataManager {
   // Get user progress data
   static async getUserProgress() {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROGRESS);
+      const data = await SecureStore.getItemAsync(STORAGE_KEYS.USER_PROGRESS);
       if (data) {
         return JSON.parse(data);
       }
@@ -49,7 +49,7 @@ class DataManager {
   // Save user progress data
   static async saveUserProgress(progressData) {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_PROGRESS, JSON.stringify(progressData));
+      await SecureStore.setItemAsync(STORAGE_KEYS.USER_PROGRESS, JSON.stringify(progressData));
       return true;
     } catch (error) {
       console.error('Error saving user progress:', error);
@@ -60,7 +60,7 @@ class DataManager {
   // Get learned words history
   static async getLearnedWords() {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.LEARNED_WORDS);
+      const data = await SecureStore.getItemAsync(STORAGE_KEYS.LEARNED_WORDS);
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error('Error getting learned words:', error);
@@ -89,7 +89,7 @@ class DataManager {
       // Keep only last 10 words for performance
       const limitedWords = updatedWords.slice(0, 10);
       
-      await AsyncStorage.setItem(STORAGE_KEYS.LEARNED_WORDS, JSON.stringify(limitedWords));
+      await SecureStore.setItemAsync(STORAGE_KEYS.LEARNED_WORDS, JSON.stringify(limitedWords));
       return true;
     } catch (error) {
       console.error('Error adding learned word:', error);
@@ -151,7 +151,7 @@ class DataManager {
   // Get user profile
   static async getUserProfile() {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+      const data = await SecureStore.getItemAsync(STORAGE_KEYS.USER_PROFILE);
       if (data) {
         return JSON.parse(data);
       }
@@ -166,7 +166,7 @@ class DataManager {
   // Save user profile
   static async saveUserProfile(profileData) {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profileData));
+      await SecureStore.setItemAsync(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profileData));
       return true;
     } catch (error) {
       console.error('Error saving user profile:', error);
@@ -209,10 +209,10 @@ class DataManager {
   // Reset all data (for testing)
   static async resetAllData() {
     try {
-      await AsyncStorage.multiRemove([
-        STORAGE_KEYS.USER_PROGRESS,
-        STORAGE_KEYS.LEARNED_WORDS,
-        STORAGE_KEYS.USER_PROFILE
+      await Promise.all([
+        SecureStore.deleteItemAsync(STORAGE_KEYS.USER_PROGRESS),
+        SecureStore.deleteItemAsync(STORAGE_KEYS.LEARNED_WORDS),
+        SecureStore.deleteItemAsync(STORAGE_KEYS.USER_PROFILE)
       ]);
       return true;
     } catch (error) {

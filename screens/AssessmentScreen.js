@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 // Expanded mixed vocabulary set (easy, medium, hard all mixed)
 const ASSESSMENT_VOCABULARY = [
@@ -113,8 +113,8 @@ const AssessmentScreen = ({ navigation }) => {
     else percentile = 25 + Math.floor(Math.random() * 25);
     
     try {
-      await AsyncStorage.setItem('userLevel', userLevel);
-      await AsyncStorage.setItem('familiarWords', JSON.stringify(selectedWords));
+      await SecureStore.setItemAsync('userLevel', userLevel);
+      await SecureStore.setItemAsync('familiarWords', JSON.stringify(selectedWords));
       console.log(`✅ User Level: ${userLevel}`);
       console.log(`📚 Familiar Words: ${selectedWords.length}`);
     } catch (error) {

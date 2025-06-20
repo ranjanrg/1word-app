@@ -9,6 +9,10 @@ const AuthWelcomeScreen = ({ navigation }) => {
     navigation.navigate('Assessment');
   };
 
+  const handleSignIn = () => {
+    navigation.navigate('Login');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
@@ -17,6 +21,9 @@ const AuthWelcomeScreen = ({ navigation }) => {
       <View style={styles.content}>
         <View style={styles.welcomeSection}>
           <Text style={styles.welcomeTitle}>Welcome to your vocabulary journey!</Text>
+          <Text style={styles.welcomeSubtitle}>
+            Learn one powerful word every day through engaging stories and smart practice
+          </Text>
         </View>
 
         {/* Features Preview */}
@@ -36,11 +43,22 @@ const AuthWelcomeScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Action Button */}
+      {/* Action Buttons */}
       <View style={styles.actionSection}>
+        {/* Primary Button - New Users */}
         <TouchableOpacity style={styles.primaryButton} onPress={handleGetStarted}>
           <Text style={styles.primaryButtonText}>Get Started</Text>
         </TouchableOpacity>
+        
+        {/* Secondary Button - Existing Users */}
+        <TouchableOpacity style={styles.secondaryButton} onPress={handleSignIn}>
+          <Text style={styles.secondaryButtonText}>I Already Have an Account</Text>
+        </TouchableOpacity>
+        
+        {/* Helper Text */}
+        <Text style={styles.helperText}>
+          New users will take a quick assessment to personalize their experience
+        </Text>
       </View>
     </View>
   );
@@ -69,6 +87,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 36,
     paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 10,
   },
   featuresContainer: {
     flexDirection: 'row',
@@ -91,13 +117,14 @@ const styles = StyleSheet.create({
   },
   actionSection: {
     paddingHorizontal: 30,
+    paddingBottom: 20,
   },
   primaryButton: {
     backgroundColor: '#000',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -108,6 +135,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  secondaryButton: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    marginBottom: 16,
+  },
+  secondaryButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 16,
+    paddingHorizontal: 20,
   },
 });
 
