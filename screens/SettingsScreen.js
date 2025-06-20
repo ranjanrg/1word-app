@@ -1,100 +1,264 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  Modal,
+  Platform
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Notifications from 'expo-notifications';
+import { useAuth } from '../contexts/AuthContext';
 
-const { width } = Dimensions.get('window');
+// Configure notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const SettingsScreen = ({ navigation }) => {
-  const [username, setUsername] = useState('User');
-  const [habitView, setHabitView] = useState('Month'); // Month, Year
-  const [habitData, setHabitData] = useState([]);
-  const [wordsLearned, setWordsLearned] = useState(0);
-  const [currentStreak, setCurrentStreak] = useState(0);
-  const [userRanking, setUserRanking] = useState(85); // Percentage better than others
+  const { 
+    userName, 
+    userEmail, 
+    userLevel, 
+    isGuest, 
+    isSignedIn,
+    userData,
+    updateUser,
+    signOut 
+  } = useAuth();
 
+  // State for settings
+  const [reminderTime, setReminderTime] = useState(new Date());
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showDifficultyModal, setShowDifficultyModal] = useState(false);
+  const [currentDifficulty, setCurrentDifficulty] = useState(userLevel || 'Beginner');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  // Difficulty levels
+  const difficultyLevels = [
+    { 
+      value: 'Beginner', 
+      label: 'Beginner',
+      description: 'Common words, basic vocabulary'
+    },
+    { 
+      value: 'Intermediate', 
+      label: 'Intermediate',
+      description: 'Moderate complexity, business terms'
+    },
+    { 
+      value: 'Advanced', 
+      label: 'Advanced',
+      description: 'Complex words, academic vocabulary'
+    },
+    { 
+      value: 'Expert', 
+      label: 'Expert',
+      description: 'Rare words, literary expressions'
+    }
+  ];
+
+  // Initialize settings on component mount
   useEffect(() => {
-    loadUserData();
-    generateHabitData();
-  }, [habitView]);
+    initializeSettings();
+  }, []);
 
-  const loadUserData = async () => {
+  const initializeSettings = async () => {
+    // Set default reminder time to 9:00 AM
+    const defaultTime = new Date();
+    defaultTime.setHours(9, 0, 0, 0);
+    setReminderTime(defaultTime);
+    
+    // Request notification permissions
+    await requestNotificationPermissions();
+    
+    // Schedule daily notification
+    await scheduleDailyNotification(defaultTime);
+  };
+
+  const requestNotificationPermissions = async () => {
     try {
-      const savedUsername = await SecureStore.getItemAsync('username');
-      const savedWordsLearned = await SecureStore.getItemAsync('totalWordsLearned');
-      const savedStreak = await SecureStore.getItemAsync('currentStreak');
-      
-      setUsername(savedUsername || 'User');
-      setWordsLearned(savedWordsLearned ? parseInt(savedWordsLearned) : 0);
-      setCurrentStreak(savedStreak ? parseInt(savedStreak) : 0);
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Notifications Disabled',
+          'Please enable notifications in your device settings to receive daily reminders.',
+          [{ text: 'OK' }]
+        );
+        setNotificationsEnabled(false);
+      } else {
+        setNotificationsEnabled(true);
+      }
     } catch (error) {
-      console.log('Error loading user data:', error);
+      console.error('Error requesting notification permissions:', error);
     }
   };
 
-  const generateHabitData = () => {
-    // Generate habit tracking data based on view (Month/Year)
-    const today = new Date();
-    let days = [];
-    
-    if (habitView === 'Month') {
-      // Generate 30 days for current month
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const completed = Math.random() > 0.3; // 70% completion rate for demo
-        days.push({
-          date: date.toISOString().split('T')[0],
-          completed,
-          day: date.getDate()
-        });
-      }
-    } else {
-      // Generate 365 days for year
-      for (let i = 364; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const completed = Math.random() > 0.3; // 70% completion rate for demo
-        days.push({
-          date: date.toISOString().split('T')[0],
-          completed,
-          month: date.getMonth(),
-          day: date.getDate()
-        });
-      }
+  const scheduleDailyNotification = async (time) => {
+    try {
+      // Cancel all existing notifications
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      
+      if (!notificationsEnabled) return;
+
+      // Schedule daily notification
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "📚 Time to learn!",
+          body: "Ready to discover your word of the day?",
+          sound: 'default',
+        },
+        trigger: {
+          hour: time.getHours(),
+          minute: time.getMinutes(),
+          repeats: true,
+        },
+      });
+
+      console.log(`✅ Daily notification scheduled for ${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}`);
+      
+    } catch (error) {
+      console.error('Error scheduling notification:', error);
     }
-    
-    setHabitData(days);
   };
 
-  const renderHabitGrid = () => {
-    const dotsPerRow = habitView === 'Month' ? 7 : 15; // 7 for month, 15 for year
-    const dotSize = habitView === 'Month' ? 16 : 8;
-    const spacing = habitView === 'Month' ? 4 : 2;
+  const handleTimeChange = async (event, selectedTime) => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
     
-    return (
-      <View style={styles.habitGrid}>
-        {habitData.map((day, index) => (
-          <View
-            key={index}
-            style={[
-              styles.habitDot,
-              {
-                width: dotSize,
-                height: dotSize,
-                marginRight: spacing,
-                marginBottom: spacing,
-                backgroundColor: day.completed ? '#000' : '#e0e0e0',
-                borderRadius: dotSize / 2,
-              }
-            ]}
-          />
-        ))}
-      </View>
+    if (selectedTime) {
+      setReminderTime(selectedTime);
+      await scheduleDailyNotification(selectedTime);
+      
+      Alert.alert(
+        'Reminder Updated',
+        `Daily reminder set for ${selectedTime.getHours()}:${selectedTime.getMinutes().toString().padStart(2, '0')}`,
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleDifficultyChange = async (newDifficulty) => {
+    try {
+      setCurrentDifficulty(newDifficulty);
+      setShowDifficultyModal(false);
+      
+      // Update user level in auth context
+      const result = await updateUser({}, newDifficulty);
+      
+      if (result.success) {
+        Alert.alert(
+          'Difficulty Updated',
+          `Your learning level has been updated to ${newDifficulty}. You'll now receive ${newDifficulty.toLowerCase()} level words.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to update difficulty level. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error updating difficulty:', error);
+      Alert.alert('Error', 'Failed to update difficulty level.');
+    }
+  };
+
+  const formatTime = (time) => {
+    return time.toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
+  // Format join date if available
+  const formatJoinDate = (dateString) => {
+    if (!dateString) return 'Recently joined';
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'Recently joined';
+    }
+  };
+
+  const handleSignOut = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('🚪 User requested sign out');
+            // Cancel all notifications
+            await Notifications.cancelAllScheduledNotificationsAsync();
+            
+            const result = await signOut();
+            if (result.success) {
+              console.log('✅ Sign out successful - staying on Settings screen');
+              // No navigation needed - user stays on Settings
+              // The button will automatically change to "Sign Up" due to auth state change
+            } else {
+              console.error('❌ Sign out failed:', result.error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSignUp = () => {
+    // Navigate to sign up screen
+    navigation.navigate('SignUpScreen'); // Change this to your actual signup screen name
+  };
+
+  const handleAbout = () => {
+    Alert.alert(
+      'About 1Word',
+      'Expand your vocabulary, one word at a time.\n\nVersion 1.0.0\n\nBuilt with ❤️ for learners everywhere.',
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handleHelp = () => {
+    Alert.alert(
+      'Help & Support',
+      'Need help? Contact us at support@1word.app\n\nOr visit our FAQ section on the website.',
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handlePrivacy = () => {
+    Alert.alert(
+      'Privacy Policy',
+      'Your privacy is important to us. We only collect data necessary to improve your learning experience.\n\nFor full details, visit our privacy policy on the website.',
+      [{ text: 'OK' }]
     );
   };
 
   return (
     <View style={styles.container}>
+      <StatusBar style="dark" />
+      
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -106,112 +270,199 @@ const SettingsScreen = ({ navigation }) => {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         
-        {/* Username Section */}
+        {/* Profile Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Profile</Text>
-          <View style={styles.usernameCard}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
-            </View>
-            <View style={styles.usernameInfo}>
-              <Text style={styles.username}>{username}</Text>
-              <Text style={styles.userSubtitle}>Vocabulary Learner</Text>
-            </View>
-            <TouchableOpacity style={styles.editButton}>
-              <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Habit Tracker Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Learning Consistency</Text>
-            <View style={styles.habitToggle}>
-              <TouchableOpacity
-                style={[styles.toggleButton, habitView === 'Month' && styles.activeToggle]}
-                onPress={() => setHabitView('Month')}
-              >
-                <Text style={[styles.toggleText, habitView === 'Month' && styles.activeToggleText]}>
-                  Month
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleButton, habitView === 'Year' && styles.activeToggle]}
-                onPress={() => setHabitView('Year')}
-              >
-                <Text style={[styles.toggleText, habitView === 'Year' && styles.activeToggleText]}>
-                  Year
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
           
-          <View style={styles.habitCard}>
-            <Text style={styles.habitTitle}>Daily Learning Streak</Text>
-            <Text style={styles.habitSubtitle}>
-              {habitView === 'Month' ? 'Last 30 days' : 'Last 365 days'}
-            </Text>
-            {renderHabitGrid()}
-            <View style={styles.habitStats}>
-              <View style={styles.habitStat}>
-                <Text style={styles.habitStatNumber}>{currentStreak}</Text>
-                <Text style={styles.habitStatLabel}>Current Streak</Text>
-              </View>
-              <View style={styles.habitStat}>
-                <Text style={styles.habitStatNumber}>
-                  {Math.floor((habitData.filter(d => d.completed).length / habitData.length) * 100)}%
+          <View style={styles.profileCard}>
+            {/* User Avatar */}
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {userName ? userName.charAt(0).toUpperCase() : 'U'}
                 </Text>
-                <Text style={styles.habitStatLabel}>Consistency</Text>
               </View>
+            </View>
+            
+            {/* User Info */}
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{userName || 'User'}</Text>
+              <Text style={styles.userEmail}>{userEmail || 'user@example.com'}</Text>
+              <Text style={styles.userLevel}>Level: {currentDifficulty}</Text>
+              {userData?.joinDate && (
+                <Text style={styles.joinDate}>
+                  Joined {formatJoinDate(userData.joinDate)}
+                </Text>
+              )}
+              {isGuest && (
+                <View style={styles.guestBadge}>
+                  <Text style={styles.guestBadgeText}>Guest Account</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
 
-        {/* Words Learned Section */}
+        {/* Learning Preferences */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Learning Progress</Text>
-          <View style={styles.progressCard}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressTitle}>Words Mastered</Text>
-              <Text style={styles.progressNumber}>{wordsLearned}</Text>
+          <Text style={styles.sectionTitle}>Learning</Text>
+          
+          <TouchableOpacity 
+            style={styles.settingItem} 
+            onPress={() => setShowTimePicker(true)}
+          >
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Reminder Time</Text>
+              <Text style={styles.settingSubtitle}>{formatTime(reminderTime)}</Text>
             </View>
-            <Text style={styles.progressSubtitle}>
-              You're doing better than {userRanking}% of learners! 🎉
-            </Text>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${userRanking}%` }]} />
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => setShowDifficultyModal(true)}
+          >
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Difficulty Level</Text>
+              <Text style={styles.settingSubtitle}>{currentDifficulty}</Text>
             </View>
-            <View style={styles.milestones}>
-              <View style={styles.milestone}>
-                <Text style={styles.milestoneNumber}>50</Text>
-                <Text style={styles.milestoneLabel}>Beginner</Text>
-              </View>
-              <View style={styles.milestone}>
-                <Text style={styles.milestoneNumber}>200</Text>
-                <Text style={styles.milestoneLabel}>Intermediate</Text>
-              </View>
-              <View style={styles.milestone}>
-                <Text style={styles.milestoneNumber}>500</Text>
-                <Text style={styles.milestoneLabel}>Advanced</Text>
-              </View>
-            </View>
-          </View>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Account Details Section */}
+        {/* Support & Info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.accountCard}>
-            <TouchableOpacity style={styles.accountItem}>
-              <Text style={styles.deleteAccountText}>Delete Account</Text>
-              <Text style={styles.accountItemArrow}>→</Text>
+          <Text style={styles.sectionTitle}>Support</Text>
+          
+          <TouchableOpacity style={styles.settingItem} onPress={handleHelp}>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Help & FAQ</Text>
+              <Text style={styles.settingSubtitle}>Get support</Text>
+            </View>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.settingItem} onPress={handlePrivacy}>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Privacy Policy</Text>
+              <Text style={styles.settingSubtitle}>How we handle your data</Text>
+            </View>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.settingItem} onPress={handleAbout}>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>About 1Word</Text>
+              <Text style={styles.settingSubtitle}>Version 1.0.0</Text>
+            </View>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Account Actions */}
+        <View style={styles.section}>
+          {isSignedIn ? (
+            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+              <Text style={styles.signOutButtonText}>Sign Out</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp}>
+              <Text style={styles.signUpButtonText}>Sign Up</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={{ height: 50 }} />
+      </ScrollView>
+
+      {/* Time Picker Modal */}
+      {showTimePicker && (
+        <Modal
+          transparent={true}
+          visible={showTimePicker}
+          onRequestClose={() => setShowTimePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.timePickerContainer}>
+              <Text style={styles.modalTitle}>Set Reminder Time</Text>
+              
+              <DateTimePicker
+                value={reminderTime}
+                mode="time"
+                is24Hour={false}
+                display="spinner"
+                onChange={handleTimeChange}
+                style={styles.timePicker}
+              />
+              
+              {Platform.OS === 'ios' && (
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => setShowTimePicker(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.confirmButton]}
+                    onPress={() => {
+                      setShowTimePicker(false);
+                      scheduleDailyNotification(reminderTime);
+                    }}
+                  >
+                    <Text style={styles.confirmButtonText}>Set Reminder</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Difficulty Level Modal */}
+      <Modal
+        transparent={true}
+        visible={showDifficultyModal}
+        onRequestClose={() => setShowDifficultyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.difficultyContainer}>
+            <Text style={styles.modalTitle}>Choose Difficulty Level</Text>
+            
+            {difficultyLevels.map((level) => (
+              <TouchableOpacity
+                key={level.value}
+                style={[
+                  styles.difficultyOption,
+                  currentDifficulty === level.value && styles.selectedDifficulty
+                ]}
+                onPress={() => handleDifficultyChange(level.value)}
+              >
+                <Text style={[
+                  styles.difficultyLabel,
+                  currentDifficulty === level.value && styles.selectedDifficultyText
+                ]}>
+                  {level.label}
+                </Text>
+                <Text style={[
+                  styles.difficultyDescription,
+                  currentDifficulty === level.value && styles.selectedDifficultyText
+                ]}>
+                  {level.description}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity
+              style={styles.cancelModalButton}
+              onPress={() => setShowDifficultyModal(false)}
+            >
+              <Text style={styles.cancelModalButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      </Modal>
     </View>
   );
 };
@@ -235,7 +486,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
   },
@@ -250,215 +501,212 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 15,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  
-  // Username Section
-  usernameCard: {
+  profileCard: {
     backgroundColor: '#f8f9fa',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
   },
+  avatarContainer: {
+    marginRight: 16,
+  },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#000',
-    alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 15,
+    alignItems: 'center',
   },
   avatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
     color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
-  usernameInfo: {
+  userInfo: {
     flex: 1,
   },
-  username: {
+  userName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 2,
   },
-  userSubtitle: {
+  userEmail: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  userLevel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  joinDate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  guestBadge: {
+    backgroundColor: '#ffeaa7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  guestBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#d63031',
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  settingContent: {
+    flex: 1,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
+    marginBottom: 2,
+  },
+  settingSubtitle: {
     fontSize: 14,
     color: '#666',
   },
-  editButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
+  settingArrow: {
+    fontSize: 18,
+    color: '#ccc',
+    marginLeft: 10,
   },
-  editButtonText: {
-    color: '#000',
-    fontSize: 14,
+  signOutButton: {
+    backgroundColor: '#2d3436',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  signOutButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: 'bold',
   },
-
-  // Habit Tracker Section
-  habitToggle: {
+  signUpButton: {
+    backgroundColor: '#00b894',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  signUpButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timePickerContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    margin: 20,
+    minWidth: 300,
+  },
+  difficultyContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    margin: 20,
+    maxWidth: 350,
+    width: '90%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#000',
+  },
+  timePicker: {
+    height: 150,
+  },
+  modalButtons: {
     flexDirection: 'row',
-    backgroundColor: '#f0f0f0',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
     borderRadius: 8,
-    padding: 2,
+    marginHorizontal: 5,
   },
-  toggleButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
   },
-  activeToggle: {
+  confirmButton: {
     backgroundColor: '#000',
   },
-  toggleText: {
-    fontSize: 14,
+  cancelButtonText: {
     color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    textAlign: 'center',
     fontWeight: 'bold',
   },
-  activeToggleText: {
+  difficultyOption: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#f0f0f0',
+    marginBottom: 12,
+  },
+  selectedDifficulty: {
+    borderColor: '#000',
+    backgroundColor: '#000',
+  },
+  difficultyLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+  },
+  difficultyDescription: {
+    fontSize: 14,
+    color: '#666',
+  },
+  selectedDifficultyText: {
     color: '#fff',
   },
-  habitCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 20,
+  cancelModalButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 10,
   },
-  habitTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 4,
-  },
-  habitSubtitle: {
-    fontSize: 14,
+  cancelModalButtonText: {
     color: '#666',
-    marginBottom: 20,
-  },
-  habitGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 20,
-  },
-  habitDot: {
-    // Dynamic styles applied inline
-  },
-  habitStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  habitStat: {
-    alignItems: 'center',
-  },
-  habitStatNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 4,
-  },
-  habitStatLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-
-  // Progress Section
-  progressCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 20,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  progressTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  progressNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  progressSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 15,
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 3,
-    marginBottom: 20,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#000',
-    borderRadius: 3,
-  },
-  milestones: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  milestone: {
-    alignItems: 'center',
-  },
-  milestoneNumber: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 4,
-  },
-  milestoneLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-
-  // Account Section
-  accountCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  accountItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-  },
-  accountItemText: {
-    fontSize: 16,
-    color: '#000',
-  },
-  deleteAccountText: {
-    fontSize: 16,
-    color: '#ff4444',
-    fontWeight: 'bold',
-  },
-  accountItemArrow: {
-    fontSize: 16,
-    color: '#666',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginHorizontal: 20,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });
 

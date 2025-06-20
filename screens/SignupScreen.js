@@ -11,15 +11,17 @@ import {
   Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useAuth } from '../contexts/AuthContext'; // ✅ Import AuthContext
 
 const SignupScreen = ({ navigation, route }) => {
+  const { signUp, isLoading } = useAuth(); // ✅ Use AuthContext
+  
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: ''
   });
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -62,29 +64,41 @@ const SignupScreen = ({ navigation, route }) => {
   };
 
   const handleSignup = async () => {
-    if (!validateForm()) return;
+    console.log('🚀 DEBUG: handleSignup called');
+    console.log('📋 Form data:', formData);
+    
+    if (!validateForm()) {
+      console.log('❌ Form validation failed');
+      return;
+    }
+    
+    console.log('✅ Form validation passed');
+    console.log('🔑 About to call signUp with:', {
+      name: formData.name,
+      email: formData.email,
+      passwordLength: formData.password.length,
+      userLevel
+    });
 
-    setLoading(true);
     try {
-      // TODO: Implement Firebase signup here
-      console.log('Signup data:', formData);
-      console.log('User level:', userLevel);
+      console.log('📞 Calling signUp function...');
+      const result = await signUp(formData.name, formData.email, formData.password, userLevel);
+      console.log('📋 SignUp result:', result);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Navigate to main screen after successful signup
-      navigation.navigate('Main', {
-        isNewUser: true,
-        userLevel,
-        userName: formData.name
-      });
-      
+      if (result.success) {
+        console.log('✅ Signup successful, navigating to Main');
+        navigation.navigate('Main', {
+          isNewUser: true,
+          userLevel,
+          userName: formData.name
+        });
+      } else {
+        console.log('❌ Signup failed:', result.error);
+        Alert.alert('Error', result.error || 'Failed to create account. Please try again.');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to create account. Please try again.');
-      console.error('Signup error:', error);
-    } finally {
-      setLoading(false);
+      console.log('💥 Exception in handleSignup:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };
 
@@ -131,6 +145,7 @@ const SignupScreen = ({ navigation, route }) => {
               onChangeText={(value) => updateFormData('name', value)}
               autoCapitalize="words"
               autoCorrect={false}
+              editable={!isLoading} // ✅ Disable when loading
             />
           </View>
 
@@ -145,6 +160,7 @@ const SignupScreen = ({ navigation, route }) => {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              editable={!isLoading} // ✅ Disable when loading
             />
           </View>
 
@@ -160,10 +176,12 @@ const SignupScreen = ({ navigation, route }) => {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!isLoading} // ✅ Disable when loading
               />
               <TouchableOpacity 
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeButton}
+                disabled={isLoading} // ✅ Disable when loading
               >
                 <Text style={styles.eyeText}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
               </TouchableOpacity>
@@ -182,10 +200,12 @@ const SignupScreen = ({ navigation, route }) => {
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!isLoading} // ✅ Disable when loading
               />
               <TouchableOpacity 
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 style={styles.eyeButton}
+                disabled={isLoading} // ✅ Disable when loading
               >
                 <Text style={styles.eyeText}>{showConfirmPassword ? '👁️' : '👁️‍🗨️'}</Text>
               </TouchableOpacity>
@@ -200,19 +220,19 @@ const SignupScreen = ({ navigation, route }) => {
       {/* Action Section */}
       <View style={styles.actionSection}>
         <TouchableOpacity 
-          style={[styles.signupButton, loading && styles.disabledButton]} 
+          style={[styles.signupButton, isLoading && styles.disabledButton]} // ✅ Use AuthContext loading
           onPress={handleSignup}
-          disabled={loading}
+          disabled={isLoading} // ✅ Use AuthContext loading
         >
           <Text style={styles.signupButtonText}>
-            {loading ? 'Creating Account...' : 'Create Account'}
+            {isLoading ? 'Creating Account...' : 'Create Account'} {/* ✅ Use AuthContext loading */}
           </Text>
         </TouchableOpacity>
         
         <View style={styles.loginPrompt}>
           <Text style={styles.loginPromptText}>Already have an account? </Text>
-          <TouchableOpacity onPress={handleLogin}>
-            <Text style={styles.loginLink}>Sign In</Text>
+          <TouchableOpacity onPress={handleLogin} disabled={isLoading}>
+            <Text style={[styles.loginLink, isLoading && { color: '#ccc' }]}>Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>

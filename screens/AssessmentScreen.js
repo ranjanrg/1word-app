@@ -1,6 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  Animated,
+  Dimensions,
+  PanGestureHandler,
+  State
+} from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as Haptics from 'expo-haptics';
+
+const { width } = Dimensions.get('window');
 
 // Expanded mixed vocabulary set (easy, medium, hard all mixed)
 const ASSESSMENT_VOCABULARY = [
@@ -61,15 +74,97 @@ const shuffleArray = (array) => {
   return shuffled;
 };
 
+const WordCard = ({ wordObj, isSelected, onPress, index }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Staggered entrance animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      delay: index * 30,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const handlePress = () => {
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // Scale animation
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    onPress(wordObj);
+  };
+
+  return (
+    <Animated.View
+      style={[
+        styles.wordCardContainer,
+        {
+          opacity: fadeAnim,
+          transform: [{ scale: scaleAnim }],
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={[
+          styles.wordCard,
+          isSelected && styles.selectedWordCard,
+        ]}
+        onPress={handlePress}
+        activeOpacity={0.8}
+      >
+        <Text style={[
+          styles.wordText,
+          isSelected && styles.selectedWordText,
+        ]}>
+          {wordObj.word}
+        </Text>
+        
+        {/* Selection indicator */}
+        {isSelected && (
+          <Animated.View style={styles.selectionIndicator}>
+            <Text style={styles.checkmark}>✓</Text>
+          </Animated.View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 const AssessmentScreen = ({ navigation }) => {
   const [selectedWords, setSelectedWords] = useState([]);
   const [vocabularyOptions, setVocabularyOptions] = useState([]);
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Shuffle vocabulary and take first 24 words for assessment
     const shuffledVocab = shuffleArray(ASSESSMENT_VOCABULARY).slice(0, 24);
     setVocabularyOptions(shuffledVocab);
   }, []);
+
+  useEffect(() => {
+    // Animate progress bar
+    const progress = selectedWords.length / vocabularyOptions.length;
+    Animated.timing(progressAnim, {
+      toValue: progress,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [selectedWords, vocabularyOptions]);
 
   const toggleWord = (wordObj) => {
     const word = wordObj.word;
@@ -102,11 +197,10 @@ const AssessmentScreen = ({ navigation }) => {
   const handleContinue = async () => {
     const userLevel = calculateUserLevel();
     const correctAnswers = selectedWords.length;
-    const totalWords = vocabularyOptions.length; // 24
+    const totalWords = vocabularyOptions.length;
     const score = Math.round((correctAnswers / totalWords) * 100);
     
-    // Calculate percentile based on performance (you can make this more sophisticated later)
-    let percentile = 50; // default
+    let percentile = 50;
     if (score >= 80) percentile = 85 + Math.floor(Math.random() * 10);
     else if (score >= 60) percentile = 70 + Math.floor(Math.random() * 15);
     else if (score >= 40) percentile = 50 + Math.floor(Math.random() * 20);
@@ -121,7 +215,9 @@ const AssessmentScreen = ({ navigation }) => {
       console.log('Error saving assessment:', error);
     }
     
-    // Navigate to PostAssessmentAuth with results
+    // Haptic feedback for completion
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
     navigation.navigate('PostAssessmentAuth', {
       userLevel,
       score,
@@ -131,67 +227,102 @@ const AssessmentScreen = ({ navigation }) => {
     });
   };
 
+  const clearAll = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedWords([]);
+  };
+
+  const getProgressText = () => {
+    const progress = Math.round((selectedWords.length / vocabularyOptions.length) * 100);
+    if (progress === 0) return "Let's get started";
+    if (progress < 50) return "Keep going";
+    if (progress < 80) return "Great progress";
+    return "Almost done";
+  };
+
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Which words are you familiar with?</Text>
-        <Text style={styles.subtitle}>Select all the words you know well</Text>
-        <Text style={styles.counter}>{selectedWords.length} words selected</Text>
+        <View style={styles.titleSection}>
+          <Text style={styles.title}>Which words do you know?</Text>
+          <Text style={styles.subtitle}>Tap the words you're familiar with</Text>
+        </View>
+        
+        {/* Progress Section */}
+        <View style={styles.progressSection}>
+          <View style={styles.progressInfo}>
+            <Text style={styles.progressText}>{getProgressText()}</Text>
+            <Text style={styles.counter}>{selectedWords.length} of {vocabularyOptions.length}</Text>
+          </View>
+          
+          <View style={styles.progressBarContainer}>
+            <Animated.View 
+              style={[
+                styles.progressBar,
+                {
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
+              ]} 
+            />
+          </View>
+        </View>
+        
+        {/* Quick Actions */}
+        {selectedWords.length > 0 && (
+          <View style={styles.quickActions}>
+            <TouchableOpacity style={styles.clearButton} onPress={clearAll}>
+              <Text style={styles.clearButtonText}>Clear All</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.wordsContainer}>
-          {vocabularyOptions.map((wordObj, index) => {
-            if (index % 2 === 0) {
-              const nextWordObj = vocabularyOptions[index + 1];
-              return (
-                <View key={index} style={styles.wordRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.wordButton,
-                      selectedWords.includes(wordObj.word) && styles.selectedWordButton
-                    ]}
-                    onPress={() => toggleWord(wordObj)}
-                  >
-                    <Text style={[
-                      styles.wordText,
-                      selectedWords.includes(wordObj.word) && styles.selectedWordText
-                    ]}>
-                      {wordObj.word}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {nextWordObj && (
-                    <TouchableOpacity
-                      style={[
-                        styles.wordButton,
-                        selectedWords.includes(nextWordObj.word) && styles.selectedWordButton
-                      ]}
-                      onPress={() => toggleWord(nextWordObj)}
-                    >
-                      <Text style={[
-                        styles.wordText,
-                        selectedWords.includes(nextWordObj.word) && styles.selectedWordText
-                      ]}>
-                        {nextWordObj.word}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            }
-            return null;
-          })}
+      {/* Words Grid */}
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.wordsGrid}>
+          {vocabularyOptions.map((wordObj, index) => (
+            <WordCard
+              key={wordObj.word}
+              wordObj={wordObj}
+              isSelected={selectedWords.includes(wordObj.word)}
+              onPress={toggleWord}
+              index={index}
+            />
+          ))}
         </View>
+        
+        <View style={styles.bottomSpacing} />
       </ScrollView>
 
+      {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={styles.continueButton}
+          style={[
+            styles.continueButton,
+            selectedWords.length === 0 && styles.continueButtonDisabled
+          ]}
           onPress={handleContinue}
+          disabled={selectedWords.length === 0}
         >
-          <Text style={styles.continueButtonText}>Continue</Text>
+          <Text style={[
+            styles.continueButtonText,
+            selectedWords.length === 0 && styles.continueButtonTextDisabled
+          ]}>
+            Continue Assessment
+          </Text>
         </TouchableOpacity>
+        
+        <Text style={styles.helpText}>
+          Don't worry if you don't know some words - that's how we learn!
+        </Text>
       </View>
     </View>
   );
@@ -203,73 +334,190 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
-    padding: 20,
+    paddingHorizontal: 24,
     paddingTop: 60,
+    paddingBottom: 20,
+  },
+  titleSection: {
+    marginBottom: 24,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#000',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 10,
+    lineHeight: 22,
+  },
+  progressSection: {
+    marginBottom: 20,
+  },
+  progressInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
   },
   counter: {
     fontSize: 14,
-    color: '#4A90E2',
-    fontWeight: 'bold',
+    color: '#666',
+    fontWeight: '500',
+  },
+  progressBarContainer: {
+    height: 4,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#000',
+    borderRadius: 2,
+  },
+  quickActions: {
+    alignItems: 'flex-end',
+    marginTop: 16,
+  },
+  clearButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
   },
-  wordsContainer: {
-    padding: 20,
-    paddingTop: 10,
+  scrollContent: {
+    paddingHorizontal: 24,
   },
-  wordRow: {
+  wordsGrid: {
     flexDirection: 'row',
-    marginBottom: 10,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
-  wordButton: {
-    flex: 1,
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    margin: 3,
+  wordCardContainer: {
+    width: (width - 60) / 2, // Account for padding and gap
+    marginBottom: 12,
+  },
+  wordCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 60,
+    minHeight: 80,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  selectedWordButton: {
+  selectedWordCard: {
     backgroundColor: '#000',
+    borderColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
   wordText: {
     fontSize: 16,
-    color: '#333',
+    fontWeight: '600',
+    color: '#000',
     textAlign: 'center',
+    lineHeight: 22,
   },
   selectedWordText: {
     color: '#fff',
+    fontWeight: '700',
+  },
+  selectionIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmark: {
+    fontSize: 12,
     fontWeight: 'bold',
+    color: '#000',
+  },
+  bottomSpacing: {
+    height: 40,
   },
   footer: {
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
   },
   continueButton: {
     backgroundColor: '#000',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 8,
+    borderRadius: 16,
+    paddingVertical: 18,
     alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  continueButtonDisabled: {
+    backgroundColor: '#f0f0f0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   continueButtonText: {
-    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  continueButtonTextDisabled: {
+    color: '#999',
+  },
+  helpText: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
 

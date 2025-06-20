@@ -1,10 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 const { width, height } = Dimensions.get('window');
 
 const AuthWelcomeScreen = ({ navigation }) => {
+  const [displayedText, setDisplayedText] = useState('');
+  const [showCursor, setShowCursor] = useState(true);
+  const fullText = "Welcome to your vocabulary journey!";
+
+  useEffect(() => {
+    let currentIndex = 0;
+    const typingInterval = setInterval(() => {
+      if (currentIndex <= fullText.length) {
+        setDisplayedText(fullText.slice(0, currentIndex));
+        currentIndex++;
+      } else {
+        clearInterval(typingInterval);
+      }
+    }, 80); // Adjust speed here (lower = faster)
+
+    // Cursor blinking effect
+    const cursorInterval = setInterval(() => {
+      setShowCursor(prev => !prev);
+    }, 530);
+
+    return () => {
+      clearInterval(typingInterval);
+      clearInterval(cursorInterval);
+    };
+  }, []);
+
   const handleGetStarted = () => {
     navigation.navigate('Assessment');
   };
@@ -20,26 +46,10 @@ const AuthWelcomeScreen = ({ navigation }) => {
       {/* Welcome Content */}
       <View style={styles.content}>
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>Welcome to your vocabulary journey!</Text>
-          <Text style={styles.welcomeSubtitle}>
-            Learn one powerful word every day through engaging stories and smart practice
+          <Text style={styles.welcomeTitle}>
+            {displayedText}
+            {showCursor && <Text style={styles.cursor}>|</Text>}
           </Text>
-        </View>
-
-        {/* Features Preview */}
-        <View style={styles.featuresContainer}>
-          <View style={styles.feature}>
-            <Text style={styles.featureIcon}>🎯</Text>
-            <Text style={styles.featureText}>Personalized Learning</Text>
-          </View>
-          <View style={styles.feature}>
-            <Text style={styles.featureIcon}>📊</Text>
-            <Text style={styles.featureText}>Progress Tracking</Text>
-          </View>
-          <View style={styles.feature}>
-            <Text style={styles.featureIcon}>🔥</Text>
-            <Text style={styles.featureText}>Streak Building</Text>
-          </View>
         </View>
       </View>
 
@@ -78,7 +88,6 @@ const styles = StyleSheet.create({
   },
   welcomeSection: {
     alignItems: 'center',
-    marginBottom: 60,
   },
   welcomeTitle: {
     fontSize: 28,
@@ -87,33 +96,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 36,
     paddingHorizontal: 20,
-    marginBottom: 16,
+    minHeight: 80, // Prevents layout jump during typing
   },
-  welcomeSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 10,
-  },
-  featuresContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
-  },
-  feature: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  featureIcon: {
-    fontSize: 32,
-    marginBottom: 12,
-  },
-  featureText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    fontWeight: '500',
+  cursor: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000',
   },
   actionSection: {
     paddingHorizontal: 30,
