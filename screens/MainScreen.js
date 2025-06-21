@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import DataManager from '../utils/DataManager';
 
 const { width } = Dimensions.get('window');
@@ -13,6 +14,10 @@ export default function MainScreen({ navigation }) {
   const [weekDays, setWeekDays] = useState([]);
   const [recentWords, setRecentWords] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Animation values
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [slideAnim] = useState(new Animated.Value(50));
 
   const handleLearnToday = () => {
     navigation.navigate('LearnWord');
@@ -40,6 +45,20 @@ export default function MainScreen({ navigation }) {
       setWordsThisWeek(completedThisWeek);
       
       setLoading(false);
+
+      // Start animations
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]).start();
     } catch (error) {
       console.error('Error loading user data:', error);
       setLoading(false);
@@ -53,138 +72,251 @@ export default function MainScreen({ navigation }) {
   if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={styles.loadingText}>Loading your progress...</Text>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingEmoji}>📚</Text>
+          <Text style={styles.loadingText}>Loading your progress...</Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.logoSection}>
-          <Text style={styles.logoIcon}>📚</Text>
-          <Text style={styles.logoText}>1Word</Text>
+      {/* Enhanced Header with Gradient */}
+      <LinearGradient
+        colors={['#000', '#2d3436']}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <View style={styles.logoSection}>
+            <Text style={styles.logoIcon}>📚</Text>
+            <Text style={styles.logoText}>1Word</Text>
+            <View style={styles.betaBadge}>
+              <Text style={styles.betaText}>BETA</Text>
+            </View>
+          </View>
+          <View style={styles.streakBadge}>
+            <Text style={styles.streakIcon}>🔥</Text>
+            <Text style={styles.streakNumber}>{currentStreak}</Text>
+          </View>
         </View>
-        <View style={styles.streakBadge}>
-          <Text style={styles.streakIcon}>🔥</Text>
-          <Text style={styles.streakNumber}>{currentStreak}</Text>
-        </View>
-      </View>
+      </LinearGradient>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         
-        {/* Week Progress Bar */}
-        <View style={styles.weekContainer}>
-          {weekDays.map((day, index) => (
-            <View key={index} style={styles.dayItem}>
-              <View style={[
-                styles.dayCircle,
-                day.completed && styles.completedCircle,
-                day.isToday && styles.todayCircle
-              ]}>
-                {day.completed ? (
-                  <Text style={styles.checkmark}>✓</Text>
-                ) : (
-                  <Text style={[styles.dayLetter, day.isToday && styles.todayLetter]}>{day.day}</Text>
-                )}
-              </View>
-              <Text style={[
-                styles.dayDate,
-                day.isToday && styles.todayDate
-              ]}>{day.date}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Main Words Learned Card */}
-        <View style={styles.mainCard}>
-          <View style={styles.mainCardContent}>
-            <View style={styles.leftSection}>
-              <Text style={styles.mainNumber}>{wordsLearned}</Text>
-              <Text style={styles.mainLabel}>Words learned</Text>
-            </View>
-            <View style={styles.rightSection}>
-              <View style={styles.progressRing}>
-                <View style={[styles.progressFill, { 
-                  transform: [{ rotate: `${(progressPercentage * 3.6)}deg` }] 
-                }]} />
-                <View style={styles.progressInner}>
-                  <Text style={styles.progressIcon}>📖</Text>
+        {/* Enhanced Week Progress */}
+        <Animated.View 
+          style={[
+            styles.weekContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <Text style={styles.weekTitle}>This Week</Text>
+          <View style={styles.weekProgressRow}>
+            {weekDays.map((day, index) => (
+              <View key={index} style={styles.dayItem}>
+                <View style={[
+                  styles.dayCircle,
+                  day.completed && styles.completedCircle,
+                  day.isToday && styles.todayCircle
+                ]}>
+                  {day.completed ? (
+                    <Text style={styles.checkmark}>✓</Text>
+                  ) : (
+                    <Text style={[styles.dayLetter, day.isToday && styles.todayLetter]}>{day.day}</Text>
+                  )}
                 </View>
+                <Text style={[
+                  styles.dayDate,
+                  day.isToday && styles.todayDate
+                ]}>{day.date}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.weekProgressBar}>
+            <View style={[styles.weekProgressFill, { width: `${progressPercentage}%` }]} />
+          </View>
+          <Text style={styles.weekProgressText}>{wordsThisWeek} of {weeklyGoal} words this week</Text>
+        </Animated.View>
+
+        {/* Enhanced Stats Cards */}
+        <Animated.View 
+          style={[
+            styles.statsContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{wordsLearned}</Text>
+              <Text style={styles.statLabel}>Words Learned</Text>
+              <View style={styles.statIcon}>
+                <Text style={styles.statEmoji}>📖</Text>
+              </View>
+            </View>
+            
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{currentStreak}</Text>
+              <Text style={styles.statLabel}>Day Streak</Text>
+              <View style={styles.statIcon}>
+                <Text style={styles.statEmoji}>🔥</Text>
               </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Learn Today Button - MAIN FOCUS */}
-        <View style={styles.heroSection}>
+        {/* Enhanced Hero CTA */}
+        <Animated.View 
+          style={[
+            styles.heroSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           <TouchableOpacity style={styles.heroButton} onPress={handleLearnToday}>
-            <View style={styles.heroButtonContent}>
-              <View style={styles.heroIcon}>
-                <Text style={styles.heroEmoji}>🌟</Text>
+            <LinearGradient
+              colors={['#000', '#2d3436', '#636e72']}
+              style={styles.heroGradient}
+            >
+              <View style={styles.heroButtonContent}>
+                <View style={styles.heroLeft}>
+                  <View style={styles.heroIconContainer}>
+                    <Text style={styles.heroEmoji}>✨</Text>
+                  </View>
+                  <View style={styles.heroTextContainer}>
+                    <Text style={styles.heroTitle}>Learn Today's Word</Text>
+                    <Text style={styles.heroSubtitle}>
+                      {currentStreak > 0 ? `Continue your ${currentStreak}-day streak!` : 'Start your learning journey!'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.heroArrow}>
+                  <Text style={styles.arrowText}>→</Text>
+                </View>
               </View>
-              <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>Learn Today's Word</Text>
-                <Text style={styles.heroSubtitle}>
-                  {currentStreak > 0 ? `Continue your ${currentStreak}-day streak!` : 'Start your learning streak!'}
-                </Text>
-              </View>
-              <View style={styles.heroArrow}>
-                <Text style={styles.arrowText}>→</Text>
-              </View>
-            </View>
-            <View style={styles.heroGlow} />
+              
+              {/* Floating elements */}
+              <View style={styles.floatingDot1} />
+              <View style={styles.floatingDot2} />
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        {/* Recent Words Section */}
-        <View style={styles.recentSection}>
-          <Text style={styles.sectionTitle}>Recently learned</Text>
+        {/* Enhanced Recent Words */}
+        <Animated.View 
+          style={[
+            styles.recentSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recently Learned</Text>
+            {recentWords.length > 3 && (
+              <TouchableOpacity>
+                <Text style={styles.seeAllText}>See All</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           
           {recentWords.length > 0 ? (
-            recentWords.map((item, index) => (
+            recentWords.slice(0, 3).map((item, index) => (
               <View key={index} style={styles.recentItem}>
                 <View style={styles.recentLeft}>
-                  <Text style={styles.recentEmoji}>{item.emoji}</Text>
-                  <View style={styles.recentText}>
+                  <View style={styles.recentEmojiContainer}>
+                    <Text style={styles.recentEmoji}>{item.emoji}</Text>
+                  </View>
+                  <View style={styles.recentTextContainer}>
                     <Text style={styles.recentWord}>{item.word}</Text>
                     <Text style={styles.recentMeaning}>{item.meaning}</Text>
                     <Text style={styles.recentDate}>{item.date}</Text>
                   </View>
                 </View>
+                <View style={styles.recentBadge}>
+                  <Text style={styles.recentBadgeText}>✓</Text>
+                </View>
               </View>
             ))
           ) : (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>You haven't learned any words yet</Text>
+              <Text style={styles.emptyEmoji}>🌟</Text>
+              <Text style={styles.emptyTitle}>Ready to start learning?</Text>
               <Text style={styles.emptySubtitle}>
-                Start your vocabulary journey by learning your first word today
+                Learn your first word today and begin your vocabulary journey
               </Text>
+              <TouchableOpacity style={styles.emptyButton} onPress={handleLearnToday}>
+                <Text style={styles.emptyButtonText}>Get Started</Text>
+              </TouchableOpacity>
             </View>
           )}
-        </View>
+        </Animated.View>
+
+        {/* Achievement Section */}
+        <Animated.View 
+          style={[
+            styles.achievementSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <Text style={styles.sectionTitle}>Achievements</Text>
+          <View style={styles.achievementGrid}>
+            <View style={[styles.achievementCard, wordsLearned >= 1 && styles.achievementUnlocked]}>
+              <Text style={styles.achievementEmoji}>🎯</Text>
+              <Text style={styles.achievementTitle}>First Word</Text>
+              <Text style={styles.achievementDesc}>Learn your first word</Text>
+            </View>
+            <View style={[styles.achievementCard, currentStreak >= 3 && styles.achievementUnlocked]}>
+              <Text style={styles.achievementEmoji}>🔥</Text>
+              <Text style={styles.achievementTitle}>3-Day Streak</Text>
+              <Text style={styles.achievementDesc}>Learn for 3 days straight</Text>
+            </View>
+            <View style={[styles.achievementCard, wordsLearned >= 10 && styles.achievementUnlocked]}>
+              <Text style={styles.achievementEmoji}>📚</Text>
+              <Text style={styles.achievementTitle}>Word Master</Text>
+              <Text style={styles.achievementDesc}>Learn 10 words</Text>
+            </View>
+          </View>
+        </Animated.View>
 
         {/* Bottom Spacing */}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Bottom Navigation */}
+      {/* Enhanced Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={[styles.navItem, styles.activeNavItem]}>
-          <Text style={styles.navIcon}>🏠</Text>
+          <View style={styles.navIconContainer}>
+            <Text style={styles.navIcon}>🏠</Text>
+          </View>
           <Text style={[styles.navLabel, styles.activeNavLabel]}>Home</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem} onPress={handleLearnToday}>
-          <Text style={styles.navIcon}>📖</Text>
+          <View style={styles.navIconContainer}>
+            <Text style={styles.navIcon}>📖</Text>
+          </View>
           <Text style={styles.navLabel}>Learn</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem} onPress={handleSettings}>
-          <Text style={styles.navIcon}>⚙️</Text>
+          <View style={styles.navIconContainer}>
+            <Text style={styles.navIcon}>⚙️</Text>
+          </View>
           <Text style={styles.navLabel}>Settings</Text>
         </TouchableOpacity>
       </View>
@@ -197,69 +329,108 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  loadingContainer: {
+    alignItems: 'center',
+  },
+  loadingEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
   loadingText: {
     fontSize: 16,
     color: '#666',
+    fontWeight: '500',
+  },
+  headerGradient: {
+    paddingTop: 50,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-    backgroundColor: '#fff',
   },
   logoSection: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   logoIcon: {
-    fontSize: 24,
-    marginRight: 8,
+    fontSize: 28,
+    marginRight: 12,
   },
   logoText: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#fff',
+    letterSpacing: -1,
+  },
+  betaBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  betaText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
   streakBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   streakIcon: {
-    fontSize: 16,
-    marginRight: 4,
+    fontSize: 18,
+    marginRight: 6,
   },
   streakNumber: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#fff',
   },
   scrollContainer: {
     flex: 1,
   },
   weekContainer: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  weekTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  weekProgressRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    backgroundColor: '#fff',
     marginBottom: 20,
   },
   dayItem: {
     alignItems: 'center',
   },
   dayCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f5f5f5',
@@ -271,6 +442,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     borderColor: '#fff',
     borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   todayCircle: {
     borderColor: '#007AFF',
@@ -278,8 +454,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   dayLetter: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#666',
   },
   todayLetter: {
@@ -287,96 +463,90 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   checkmark: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
   },
   dayDate: {
     fontSize: 12,
     color: '#999',
+    fontWeight: '500',
   },
   todayDate: {
     color: '#007AFF',
     fontWeight: '600',
   },
-  mainCard: {
-    backgroundColor: '#fff',
+  weekProgressBar: {
+    height: 6,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  weekProgressFill: {
+    height: '100%',
+    backgroundColor: '#000',
+    borderRadius: 3,
+  },
+  weekProgressText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  statsContainer: {
     marginHorizontal: 20,
+    marginTop: 20,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    backgroundColor: '#fff',
+    flex: 1,
+    marginHorizontal: 6,
     borderRadius: 16,
-    padding: 24,
-    marginBottom: 20,
+    padding: 20,
+    alignItems: 'center',
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  mainCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  leftSection: {
-    flex: 1,
-  },
-  mainNumber: {
-    fontSize: 48,
+  statNumber: {
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 4,
   },
-  mainLabel: {
-    fontSize: 16,
+  statLabel: {
+    fontSize: 14,
     color: '#666',
+    fontWeight: '500',
   },
-  rightSection: {
-    alignItems: 'center',
-  },
-  progressRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#f8f9fa',
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#e5e7eb',
-  },
-  progressFill: {
+  statIcon: {
     position: 'absolute',
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    borderWidth: 3,
-    borderColor: '#6b7280',
-    borderRightColor: 'transparent',
-    borderBottomColor: 'transparent',
-  },
-  progressInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#fff',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f8f9fa',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  progressIcon: {
-    fontSize: 20,
+  statEmoji: {
+    fontSize: 16,
   },
   heroSection: {
     paddingHorizontal: 20,
-    marginBottom: 30,
+    marginTop: 24,
   },
   heroButton: {
-    backgroundColor: '#000',
-    borderRadius: 20,
-    padding: 24,
-    position: 'relative',
+    borderRadius: 24,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -384,40 +554,52 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 12,
   },
+  heroGradient: {
+    padding: 28,
+    position: 'relative',
+    overflow: 'hidden',
+  },
   heroButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     zIndex: 2,
   },
-  heroIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  heroLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  heroIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 20,
+    marginRight: 16,
   },
   heroEmoji: {
     fontSize: 28,
   },
-  heroText: {
+  heroTextContainer: {
     flex: 1,
   },
   heroTitle: {
     color: '#fff',
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   heroSubtitle: {
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 16,
+    lineHeight: 22,
   },
   heroArrow: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -427,45 +609,76 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
-  heroGlow: {
+  floatingDot1: {
     position: 'absolute',
-    top: -50,
-    right: -50,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    top: 20,
+    right: 80,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    zIndex: 1,
+  },
+  floatingDot2: {
+    position: 'absolute',
+    bottom: 30,
+    right: 120,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   recentSection: {
     paddingHorizontal: 20,
+    marginTop: 32,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 16,
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
   },
   recentItem: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 2,
   },
   recentLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
-  recentEmoji: {
-    fontSize: 24,
+  recentEmojiContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 16,
   },
-  recentText: {
+  recentEmoji: {
+    fontSize: 20,
+  },
+  recentTextContainer: {
     flex: 1,
   },
   recentWord: {
@@ -473,30 +686,50 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 2,
+    textTransform: 'capitalize',
   },
   recentMeaning: {
     fontSize: 14,
     color: '#666',
     marginBottom: 2,
+    lineHeight: 18,
   },
   recentDate: {
     fontSize: 12,
     color: '#999',
+    fontWeight: '500',
+  },
+  recentBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentBadgeText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   emptyState: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
+    borderRadius: 20,
+    padding: 32,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 2,
   },
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#000',
     marginBottom: 8,
     textAlign: 'center',
@@ -506,14 +739,77 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 24,
+  },
+  emptyButton: {
+    backgroundColor: '#000',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  achievementSection: {
+    paddingHorizontal: 20,
+    marginTop: 32,
+  },
+  achievementGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  achievementCard: {
+    backgroundColor: '#fff',
+    flex: 1,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    opacity: 0.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  achievementUnlocked: {
+    opacity: 1,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  achievementEmoji: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  achievementTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  achievementDesc: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 14,
   },
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    paddingVertical: 12,
+    paddingVertical: 16,
     paddingHorizontal: 20,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
   },
   navItem: {
     flex: 1,
@@ -521,19 +817,23 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   activeNavItem: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    paddingVertical: 12,
+  },
+  navIconContainer: {
+    marginBottom: 4,
   },
   navIcon: {
-    fontSize: 20,
-    marginBottom: 4,
+    fontSize: 22,
   },
   navLabel: {
     fontSize: 12,
     color: '#666',
+    fontWeight: '500',
   },
   activeNavLabel: {
     color: '#000',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

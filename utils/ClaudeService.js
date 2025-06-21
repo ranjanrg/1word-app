@@ -1,4 +1,3 @@
-import axios from 'axios';
 import config from '../config.js';
 
 // ⚠️ IMPORTANT: Replace with your actual API key
@@ -13,29 +12,51 @@ class ClaudeService {
       const prompt = this.createWordGenerationPrompt(userLevel, previousWords);
       
       console.log('🔑 Making API request to Claude...');
+      console.log('🔍 API Key length:', CLAUDE_API_KEY ? CLAUDE_API_KEY.length : 'undefined');
+      console.log('🔍 API Key starts with:', CLAUDE_API_KEY ? CLAUDE_API_KEY.substring(0, 10) + '...' : 'undefined');
       
-      const response = await axios.post(CLAUDE_API_URL, {
-        model: 'claude-3-haiku-20240307',
+      const requestBody = {
+        model: 'claude-3-sonnet-20240229', // Updated to working model
         max_tokens: 1500,
         messages: [{
           role: 'user',
           content: prompt
         }]
-      }, {
+      };
+
+      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+      
+      // Replace axios with fetch
+      const response = await fetch(CLAUDE_API_URL, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': CLAUDE_API_KEY,
           'anthropic-version': '2023-06-01'
         },
-        timeout: 30000 // 30 second timeout
+        body: JSON.stringify(requestBody)
       });
 
+      console.log('📥 Response status:', response.status);
+      console.log('📥 Response headers:', response.headers);
+
+      if (!response.ok) {
+        // Get detailed error info
+        const errorText = await response.text();
+        console.error('❌ API Error Details:', errorText);
+        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
       console.log('✅ Got response from Claude!');
-      const content = response.data.content[0].text;
+      console.log('📊 Response data:', JSON.stringify(data, null, 2));
+      
+      const content = data.content[0].text;
       return this.parseWordLesson(content);
       
     } catch (error) {
-      console.error('❌ Error generating word lesson:', error.response?.data || error.message);
+      console.error('❌ Error generating word lesson:', error.message);
+      console.error('🔍 Full error:', error);
       return this.getFallbackLesson();
     }
   }
@@ -84,20 +105,25 @@ Generate the lesson now:`;
   // Parse Claude's response into structured data
   static parseWordLesson(content) {
     try {
+      console.log('🔍 Parsing content:', content);
+      
       // Extract JSON from Claude's response
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
+        console.error('❌ No JSON found in response');
         throw new Error('No JSON found in response');
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
+      console.log('✅ Parsed JSON:', parsed);
       
       // Validate required fields
       if (!parsed.word || !parsed.story || !parsed.definition) {
+        console.error('❌ Missing required fields in parsed data');
         throw new Error('Missing required fields');
       }
 
-      return {
+      const result = {
         targetWord: parsed.word.toLowerCase(),
         emoji: parsed.emoji || '📚',
         story: parsed.story,
@@ -109,14 +135,19 @@ Generate the lesson now:`;
         steps: this.generateStepsFromLesson(parsed)
       };
 
+      console.log('✅ Final lesson result:', result);
+      return result;
+
     } catch (error) {
-      console.error('Error parsing word lesson:', error);
+      console.error('❌ Error parsing word lesson:', error);
       return this.getFallbackLesson();
     }
   }
 
   // Generate the 4-step learning flow from the lesson data
   static generateStepsFromLesson(lesson) {
+    console.log('🔧 Generating steps from lesson:', lesson);
+    
     return {
       1: {
         type: 'discovery',
@@ -170,6 +201,7 @@ Generate the lesson now:`;
 
   // Fallback lesson when API fails
   static getFallbackLesson() {
+    console.log('📚 Using fallback lesson');
     return {
       targetWord: 'serendipity',
       emoji: '✨',
@@ -233,6 +265,7 @@ Generate the lesson now:`;
       const profile = await DataManager.getUserProfile();
       return profile.level || 'Beginner';
     } catch (error) {
+      console.log('⚠️ Using default level: Beginner');
       return 'Beginner';
     }
   }
@@ -244,6 +277,7 @@ Generate the lesson now:`;
       const learnedWords = await DataManager.getLearnedWords();
       return learnedWords.map(item => item.word).slice(0, 10); // Last 10 words
     } catch (error) {
+      console.log('⚠️ No previous words found');
       return [];
     }
   }
@@ -251,46 +285,60 @@ Generate the lesson now:`;
   // Main method to get a complete lesson
   static async getNewLesson() {
     try {
+      console.log('🎯 Getting new lesson...');
       const userLevel = await this.getUserLevel();
       const previousWords = await this.getPreviousWords();
       
+      console.log('👤 User level:', userLevel);
+      console.log('📝 Previous words:', previousWords);
+      
       return await this.generateWordLesson(userLevel, previousWords);
     } catch (error) {
-      console.error('Error getting new lesson:', error);
+      console.error('❌ Error getting new lesson:', error);
       return this.getFallbackLesson();
     }
   }
 
-  // Test the API connection
+  // Test the API connection with simpler request
   static async testConnection() {
     try {
-      console.log('🧪 Testing with API key:', CLAUDE_API_KEY.substring(0, 20) + '...');
+      console.log('🧪 Testing API connection...');
+      console.log('🔍 API Key check:', CLAUDE_API_KEY ? 'Present' : 'Missing');
       
-      const response = await axios.post(CLAUDE_API_URL, {
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 50,
-        messages: [{
-          role: 'user',
-          content: 'Respond with just "API connection successful"'
-        }]
-      }, {
+      if (!CLAUDE_API_KEY) {
+        throw new Error('API key is missing');
+      }
+
+      const response = await fetch(CLAUDE_API_URL, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': CLAUDE_API_KEY,
           'anthropic-version': '2023-06-01'
         },
-        timeout: 10000
+        body: JSON.stringify({
+          model: 'claude-3-sonnet-20240229',
+          max_tokens: 50,
+          messages: [{
+            role: 'user',
+            content: 'Respond with just "API connection successful"'
+          }]
+        })
       });
 
-      console.log('✅ Raw API response:', response.data);
-      return response.data.content[0].text.includes('successful');
+      console.log('🧪 Test response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ API test failed:', errorText);
+        throw new Error(`API test failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Test successful:', data);
+      return data.content[0].text.includes('successful');
     } catch (error) {
-      console.error('❌ API connection failed details:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message
-      });
+      console.error('❌ API connection test failed:', error.message);
       return false;
     }
   }

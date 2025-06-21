@@ -8,13 +8,15 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
+  Animated
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../contexts/AuthContext'; // ✅ Import AuthContext
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../contexts/AuthContext';
 
 const SignupScreen = ({ navigation, route }) => {
-  const { signUp, isLoading } = useAuth(); // ✅ Use AuthContext
+  const { signUp, isLoading } = useAuth();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -24,6 +26,7 @@ const SignupScreen = ({ navigation, route }) => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [scaleAnim] = useState(new Animated.Value(1));
 
   // Get assessment results from previous screen
   const { 
@@ -71,6 +74,20 @@ const SignupScreen = ({ navigation, route }) => {
       console.log('❌ Form validation failed');
       return;
     }
+
+    // Button press animation
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
     
     console.log('✅ Form validation passed');
     console.log('🔑 About to call signUp with:', {
@@ -111,29 +128,52 @@ const SignupScreen = ({ navigation, route }) => {
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Header with Gradient */}
+      <LinearGradient
+        colors={['#000', '#2d3436']}
+        style={styles.header}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Account</Text>
         <View style={styles.placeholder} />
-      </View>
+      </LinearGradient>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         
+        {/* Assessment Results Card */}
+        <View style={styles.resultsCard}>
+          <View style={styles.resultsHeader}>
+            <Text style={styles.congratsText}>🎉 Assessment Complete!</Text>
+            <Text style={styles.levelText}>You're {userLevel}</Text>
+          </View>
+          
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{score}%</Text>
+              <Text style={styles.statLabel}>Score</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{percentile}rd</Text>
+              <Text style={styles.statLabel}>Percentile</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Welcome Section */}
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>You're {userLevel}! 🎉</Text>
+          <Text style={styles.welcomeTitle}>📧 Create Your Account</Text>
           <Text style={styles.welcomeSubtitle}>
-            Create your account to save your progress and start your vocabulary journey
+            Save your progress and start your personalized vocabulary journey
           </Text>
         </View>
 
         {/* Form Section */}
-        <View style={styles.formSection}>
+        <View style={styles.formCard}>
           
           {/* Name Input */}
           <View style={styles.inputGroup}>
@@ -145,7 +185,7 @@ const SignupScreen = ({ navigation, route }) => {
               onChangeText={(value) => updateFormData('name', value)}
               autoCapitalize="words"
               autoCorrect={false}
-              editable={!isLoading} // ✅ Disable when loading
+              editable={!isLoading}
             />
           </View>
 
@@ -160,7 +200,7 @@ const SignupScreen = ({ navigation, route }) => {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!isLoading} // ✅ Disable when loading
+              editable={!isLoading}
             />
           </View>
 
@@ -170,18 +210,18 @@ const SignupScreen = ({ navigation, route }) => {
             <View style={styles.passwordContainer}>
               <TextInput
                 style={styles.passwordInput}
-                placeholder="Create a password"
+                placeholder="Create a password (min 6 characters)"
                 value={formData.password}
                 onChangeText={(value) => updateFormData('password', value)}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!isLoading} // ✅ Disable when loading
+                editable={!isLoading}
               />
               <TouchableOpacity 
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeButton}
-                disabled={isLoading} // ✅ Disable when loading
+                disabled={isLoading}
               >
                 <Text style={styles.eyeText}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
               </TouchableOpacity>
@@ -200,34 +240,52 @@ const SignupScreen = ({ navigation, route }) => {
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!isLoading} // ✅ Disable when loading
+                editable={!isLoading}
               />
               <TouchableOpacity 
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 style={styles.eyeButton}
-                disabled={isLoading} // ✅ Disable when loading
+                disabled={isLoading}
               >
                 <Text style={styles.eyeText}>{showConfirmPassword ? '👁️' : '👁️‍🗨️'}</Text>
               </TouchableOpacity>
             </View>
           </View>
 
+          {/* Benefits */}
+          <View style={styles.benefitsContainer}>
+            <View style={styles.benefitItem}>
+              <Text style={styles.benefitIcon}>📊</Text>
+              <Text style={styles.benefitText}>Track your progress</Text>
+            </View>
+            <View style={styles.benefitItem}>
+              <Text style={styles.benefitIcon}>🎯</Text>
+              <Text style={styles.benefitText}>Personalized lessons</Text>
+            </View>
+            <View style={styles.benefitItem}>
+              <Text style={styles.benefitIcon}>🏆</Text>
+              <Text style={styles.benefitText}>Earn achievements</Text>
+            </View>
+          </View>
+
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* Action Section */}
       <View style={styles.actionSection}>
-        <TouchableOpacity 
-          style={[styles.signupButton, isLoading && styles.disabledButton]} // ✅ Use AuthContext loading
-          onPress={handleSignup}
-          disabled={isLoading} // ✅ Use AuthContext loading
-        >
-          <Text style={styles.signupButtonText}>
-            {isLoading ? 'Creating Account...' : 'Create Account'} {/* ✅ Use AuthContext loading */}
-          </Text>
-        </TouchableOpacity>
+        <Animated.View style={[styles.buttonContainer, { transform: [{ scale: scaleAnim }] }]}>
+          <TouchableOpacity 
+            style={[styles.signupButton, isLoading && styles.disabledButton]}
+            onPress={handleSignup}
+            disabled={isLoading}
+          >
+            <Text style={styles.signupButtonText}>
+              {isLoading ? 'Creating Account...' : 'Create Account'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
         
         <View style={styles.loginPrompt}>
           <Text style={styles.loginPromptText}>Already have an account? </Text>
@@ -243,7 +301,7 @@ const SignupScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
@@ -251,17 +309,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 50,
-    paddingBottom: 20,
+    paddingBottom: 25,
   },
   backButton: {
     fontSize: 24,
-    color: '#000',
+    color: '#fff',
     fontWeight: 'bold',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#fff',
   },
   placeholder: {
     width: 24,
@@ -269,9 +327,63 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  resultsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  resultsHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  congratsText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  levelText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e0e0e0',
+    marginHorizontal: 20,
+  },
   welcomeSection: {
-    paddingHorizontal: 30,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   welcomeTitle: {
@@ -287,9 +399,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  formSection: {
-    paddingHorizontal: 30,
-    paddingTop: 20,
+  formCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 20,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   inputGroup: {
     marginBottom: 20,
@@ -330,25 +450,46 @@ const styles = StyleSheet.create({
   eyeText: {
     fontSize: 18,
   },
+  benefitsContainer: {
+    marginTop: 8,
+    gap: 12,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  benefitIcon: {
+    fontSize: 18,
+    marginRight: 12,
+    width: 24,
+  },
+  benefitText: {
+    fontSize: 15,
+    color: '#555',
+    fontWeight: '500',
+  },
   actionSection: {
-    paddingHorizontal: 30,
+    paddingHorizontal: 20,
     paddingBottom: 30,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
+  },
+  buttonContainer: {
+    marginBottom: 20,
   },
   signupButton: {
     backgroundColor: '#000',
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: 16,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
   },
   disabledButton: {
     backgroundColor: '#666',
+    shadowOpacity: 0.1,
   },
   signupButtonText: {
     color: '#fff',
@@ -366,9 +507,8 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     fontSize: 16,
-    color: '#000',
+    color: '#007AFF',
     fontWeight: 'bold',
-    textDecorationLine: 'underline',
   },
 });
 

@@ -14,7 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../contexts/AuthContext';
 
 const LoginScreen = ({ navigation }) => {
-  const { signIn, setGuest, isLoading } = useAuth();
+  const { signIn, isLoading } = useAuth();
   
   const [formData, setFormData] = useState({
     email: '',
@@ -62,18 +62,7 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleForgotPassword = () => {
-    Alert.alert(
-      'Reset Password', 
-      'Password reset functionality will be implemented soon!',
-      [{ text: 'OK' }]
-    );
-  };
-
-  const handleGuestMode = async () => {
-    const result = await setGuest();
-    if (result.success) {
-      navigation.navigate('Main');
-    }
+    navigation.navigate('ForgotPassword');
   };
 
   return (
@@ -154,8 +143,6 @@ const LoginScreen = ({ navigation }) => {
           </TouchableOpacity>
 
         </View>
-
-        <View style={{ height: 50 }} />
       </ScrollView>
 
       {/* Action Section */}
@@ -177,24 +164,6 @@ const LoginScreen = ({ navigation }) => {
           <TouchableOpacity onPress={handleSignup} disabled={isLoading}>
             <Text style={[styles.signupLink, isLoading && { color: '#ccc' }]}>Create Account</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Guest Mode */}
-        <TouchableOpacity 
-          style={[styles.guestButton, isLoading && styles.disabledButton]}
-          onPress={handleGuestMode}
-          disabled={isLoading}
-        >
-          <Text style={[styles.guestButtonText, isLoading && { color: '#ccc' }]}>
-            Continue as Guest
-          </Text>
-        </TouchableOpacity>
-
-        {/* Demo Credentials */}
-        <View style={styles.demoSection}>
-          <Text style={styles.demoTitle}>Demo Credentials:</Text>
-          <Text style={styles.demoText}>Email: test@example.com</Text>
-          <Text style={styles.demoText}>Password: password</Text>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -329,7 +298,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
   },
   signupPromptText: {
     fontSize: 16,
@@ -340,39 +308,6 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: 'bold',
     textDecorationLine: 'underline',
-  },
-  guestButton: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    marginBottom: 20,
-  },
-  guestButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  demoSection: {
-    backgroundColor: '#f0f9ff',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e0f2fe',
-  },
-  demoTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#0369a1',
-    marginBottom: 4,
-  },
-  demoText: {
-    fontSize: 11,
-    color: '#0369a1',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });
 
