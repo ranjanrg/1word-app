@@ -25,7 +25,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
     return emailRegex.test(email);
   };
 
-  const handleResetPassword = async () => {
+  const handleMagicLinkLogin = async () => {
     if (!email.trim()) {
       Alert.alert('Error', 'Please enter your email address');
       return;
@@ -53,32 +53,36 @@ const ForgotPasswordScreen = ({ navigation }) => {
     ]).start();
 
     try {
-      console.log('📧 Sending password reset email to:', email.trim());
+      console.log('🔗 Sending magic link to:', email.trim());
 
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        email.toLowerCase().trim(),
-        {
-          redirectTo: 'https://oneword.app/reset-password' // Replace with your actual domain
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.toLowerCase().trim(),
+        options: {
+          shouldCreateUser: false, // Only send to existing users
         }
-      );
+      });
 
       if (error) {
-        console.error('Password reset error:', error);
+        console.error('Magic link error:', error);
         
-        // Check if it's a rate limit error
         if (error.message.includes('rate limit') || error.message.includes('too many')) {
           Alert.alert(
             'Too Many Requests', 
-            'Please wait a few minutes before requesting another reset email.'
+            'Please wait a few minutes before requesting another link.'
+          );
+        } else if (error.message.includes('not found') || error.message.includes('invalid email')) {
+          Alert.alert(
+            'Email Not Found', 
+            'No account found with this email address. Please check your email or create a new account.'
           );
         } else {
           Alert.alert(
             'Error', 
-            'Failed to send reset email. Please check your email address and try again.'
+            'Failed to send login link. Please try again.'
           );
         }
       } else {
-        console.log('✅ Password reset email sent successfully');
+        console.log('✅ Magic link sent successfully');
         setEmailSent(true);
       }
 
@@ -112,7 +116,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
           <TouchableOpacity onPress={handleBackToLogin}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Reset Email Sent</Text>
+          <Text style={styles.headerTitle}>Login Link Sent</Text>
           <View style={styles.placeholder} />
         </LinearGradient>
 
@@ -120,12 +124,12 @@ const ForgotPasswordScreen = ({ navigation }) => {
         <View style={styles.content}>
           <View style={styles.successCard}>
             <View style={styles.iconContainer}>
-              <Text style={styles.successIcon}>📧</Text>
+              <Text style={styles.successIcon}>🔗</Text>
             </View>
             
             <Text style={styles.successTitle}>Check Your Email!</Text>
             <Text style={styles.successSubtitle}>
-              We've sent a password reset link to:
+              We've sent a magic login link to:
             </Text>
             <Text style={styles.emailText}>{email}</Text>
 
@@ -138,15 +142,11 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 </View>
                 <View style={styles.step}>
                   <Text style={styles.stepNumber}>2</Text>
-                  <Text style={styles.stepText}>Click the reset link</Text>
+                  <Text style={styles.stepText}>Click the login link</Text>
                 </View>
                 <View style={styles.step}>
                   <Text style={styles.stepNumber}>3</Text>
-                  <Text style={styles.stepText}>Create a new password</Text>
-                </View>
-                <View style={styles.step}>
-                  <Text style={styles.stepNumber}>4</Text>
-                  <Text style={styles.stepText}>Sign in with new password</Text>
+                  <Text style={styles.stepText}>You'll be automatically signed in!</Text>
                 </View>
               </View>
             </View>
@@ -193,7 +193,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reset Password</Text>
+        <Text style={styles.headerTitle}>Magic Link Login</Text>
         <View style={styles.placeholder} />
       </LinearGradient>
 
@@ -203,12 +203,12 @@ const ForgotPasswordScreen = ({ navigation }) => {
         {/* Main Card */}
         <View style={styles.mainCard}>
           <View style={styles.iconContainer}>
-            <Text style={styles.mainIcon}>🔑</Text>
+            <Text style={styles.mainIcon}>🔗</Text>
           </View>
           
-          <Text style={styles.title}>Forgot Your Password?</Text>
+          <Text style={styles.title}>Sign In With Magic Link</Text>
           <Text style={styles.subtitle}>
-            No worries! Enter your email address and we'll send you a link to reset your password.
+            Enter your email address and we'll send you a secure login link. No password needed!
           </Text>
 
           {/* Email Input */}
@@ -231,9 +231,9 @@ const ForgotPasswordScreen = ({ navigation }) => {
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>How it works:</Text>
           <View style={styles.infoList}>
-            <Text style={styles.infoItem}>• We'll send a secure reset link to your email</Text>
-            <Text style={styles.infoItem}>• The link expires in 1 hour for security</Text>
-            <Text style={styles.infoItem}>• You can create a new password instantly</Text>
+            <Text style={styles.infoItem}>• We'll send a secure login link to your email</Text>
+            <Text style={styles.infoItem}>• Click the link to sign in instantly</Text>
+            <Text style={styles.infoItem}>• No password required - safer and easier!</Text>
           </View>
         </View>
 
@@ -241,11 +241,11 @@ const ForgotPasswordScreen = ({ navigation }) => {
         <Animated.View style={[styles.buttonContainer, { transform: [{ scale: scaleAnim }] }]}>
           <TouchableOpacity
             style={[styles.sendButton, isLoading && styles.disabledButton]}
-            onPress={handleResetPassword}
+            onPress={handleMagicLinkLogin}
             disabled={isLoading}
           >
             <Text style={styles.sendButtonText}>
-              {isLoading ? 'Sending...' : 'Send Reset Link'}
+              {isLoading ? 'Sending...' : 'Send Login Link'}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -513,7 +513,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
+  secondaryButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
   },
-);
+});
 
 export default ForgotPasswordScreen;
