@@ -25,7 +25,7 @@ const LoadingNavigator = () => (
   </Stack.Navigator>
 );
 
-// Auth Stack Component
+// Auth Stack Component - FIXED: Proper screen order
 const AuthStack = () => (
   <Stack.Navigator 
     initialRouteName="AuthWelcome"
@@ -36,24 +36,24 @@ const AuthStack = () => (
   >
     <Stack.Screen name="AuthWelcome" component={AuthWelcomeScreen} />
     <Stack.Screen name="Assessment" component={AssessmentScreen} />
-    <Stack.Screen name="Login" component={LoginScreen} />
+    <Stack.Screen name="LearningGoals" component={LearningGoalsScreen} />
     <Stack.Screen name="Signup" component={SignupScreen} />
+    <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-    <Stack.Screen name="LearningGoals" component={LearningGoalsScreen} />
   </Stack.Navigator>
 );
 
-// Main App Stack Component
+// Main App Stack Component - FIXED: Ensure MainScreen is properly registered
 const MainStack = () => (
   <Stack.Navigator 
-    initialRouteName="Main"
+    initialRouteName="MainScreen"
     screenOptions={{
       headerShown: false,
       gestureEnabled: true,
     }}
   >
-    <Stack.Screen name="Main" component={MainScreen} />
+    <Stack.Screen name="MainScreen" component={MainScreen} />
     <Stack.Screen name="LearnWord" component={LearnWordScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
     <Stack.Screen name="LearningGoals" component={LearningGoalsScreen} />
@@ -63,6 +63,8 @@ const MainStack = () => (
 // Navigation component that uses auth state
 function AppNavigator() {
   const { isLoading, isSignedIn, isGuest } = useAuth();
+
+  console.log('🔍 Navigation State:', { isLoading, isSignedIn, isGuest });
 
   // Show loading screen while checking auth state
   if (isLoading) {

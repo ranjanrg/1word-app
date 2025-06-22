@@ -98,30 +98,119 @@ export default function LearnWordScreen({ navigation }) {
   };
 
   // Transform Claude lesson data to component format
-  const transformLessonData = (lesson) => {
+// Replace your transformLessonData function in LearnWordScreen.js with this:
+
+const transformLessonData = (lesson) => {
+  console.log('🔄 Transforming lesson data:', lesson);
+  
+  // Ensure lesson and steps exist
+  if (!lesson || !lesson.steps) {
+    console.error('❌ Invalid lesson structure');
+    // Return a safe fallback structure
     return {
-      targetWord: lesson.targetWord.toUpperCase(),
+      targetWord: 'SERENDIPITY',
+      emoji: '✨',
+      story: 'Maya was looking for a coffee shop when she stumbled upon a tiny bookstore. Inside, she found the exact rare novel she had been searching for months. This unexpected discovery filled her with joy.',
+      storyOptions: [
+        { id: 'A', text: 'serendipity', correct: true },
+        { id: 'B', text: 'melancholy', correct: false },
+        { id: 'C', text: 'perseverance', correct: false },
+        { id: 'D', text: 'hypothesis', correct: false }
+      ],
+      meaningOptions: [
+        { id: 'A', text: 'A pleasant surprise or discovery', correct: true },
+        { id: 'B', text: 'A feeling of deep sadness', correct: false },
+        { id: 'C', text: 'A planned achievement', correct: false },
+        { id: 'D', text: 'A difficult challenge', correct: false }
+      ],
+      spellingLetters: ['S', 'E', 'R', 'E', 'N', 'D', 'I', 'P', 'I', 'T', 'Y'].sort(() => Math.random() - 0.5),
+      usageOptions: [
+        { id: 'A', text: 'Finding my soulmate at a random coffee shop was pure serendipity', correct: true },
+        { id: 'B', text: 'I serendipity my homework every night', correct: false },
+        { id: 'C', text: 'The serendipity weather ruined our picnic', correct: false },
+        { id: 'D', text: 'She serendipity walked to the store yesterday', correct: false }
+      ],
+      definition: 'A pleasant surprise or discovery'
+    };
+  }
+
+  try {
+    const transformed = {
+      targetWord: lesson.targetWord?.toUpperCase() || 'SERENDIPITY',
       emoji: lesson.emoji || '📚',
-      story: lesson.story,
-      storyOptions: lesson.steps[1].options.map((option, index) => ({
+      story: lesson.story || 'This is a story about learning new words.',
+      
+      // Story options (Step 1) - Safe access with fallbacks
+      storyOptions: (lesson.steps[1]?.options || ['serendipity', 'melancholy', 'perseverance', 'hypothesis']).map((option, index) => ({
         id: String.fromCharCode(65 + index), // A, B, C, D
         text: option,
-        correct: option === lesson.steps[1].correctAnswer
+        correct: option === (lesson.steps[1]?.correctAnswer || 'serendipity')
       })),
-      meaningOptions: lesson.steps[2].options.map((option, index) => ({
+      
+      // Meaning options (Step 2) - Safe access with fallbacks
+      meaningOptions: (lesson.steps[2]?.options || [
+        'A pleasant surprise or discovery',
+        'A feeling of deep sadness',
+        'A planned achievement',
+        'A difficult challenge'
+      ]).map((option, index) => ({
         id: String.fromCharCode(65 + index),
         text: option,
-        correct: option === lesson.steps[2].correctAnswer
+        correct: option === (lesson.steps[2]?.correctAnswer || 'A pleasant surprise or discovery')
       })),
-      spellingLetters: lesson.steps[3].letters,
-      usageOptions: lesson.steps[4].options.map((option, index) => ({
+      
+      // Spelling letters (Step 3) - Safe access with fallback
+      spellingLetters: lesson.steps[3]?.letters || 
+        (lesson.targetWord?.toUpperCase().split('').sort(() => Math.random() - 0.5)) ||
+        ['S', 'E', 'R', 'E', 'N', 'D', 'I', 'P', 'I', 'T', 'Y'].sort(() => Math.random() - 0.5),
+      
+      // Usage options (Step 4) - Safe access with fallbacks
+      usageOptions: (lesson.steps[4]?.options || [
+        'Finding my soulmate at a random coffee shop was pure serendipity',
+        'I serendipity my homework every night',
+        'The serendipity weather ruined our picnic',
+        'She serendipity walked to the store yesterday'
+      ]).map((option, index) => ({
         id: String.fromCharCode(65 + index),
         text: option,
-        correct: option === lesson.steps[4].correctAnswer
+        correct: option === (lesson.steps[4]?.correctAnswer || lesson.steps[4]?.options?.[0])
       })),
-      definition: lesson.definition
+      
+      definition: lesson.definition || 'A pleasant surprise or discovery'
     };
-  };
+
+    console.log('✅ Transformed lesson data:', transformed);
+    return transformed;
+  } catch (error) {
+    console.error('❌ Error transforming lesson data:', error);
+    // Return safe fallback if transformation fails
+    return {
+      targetWord: 'SERENDIPITY',
+      emoji: '✨',
+      story: 'Maya was looking for a coffee shop when she stumbled upon a tiny bookstore. Inside, she found the exact rare novel she had been searching for months. This unexpected discovery filled her with joy.',
+      storyOptions: [
+        { id: 'A', text: 'serendipity', correct: true },
+        { id: 'B', text: 'melancholy', correct: false },
+        { id: 'C', text: 'perseverance', correct: false },
+        { id: 'D', text: 'hypothesis', correct: false }
+      ],
+      meaningOptions: [
+        { id: 'A', text: 'A pleasant surprise or discovery', correct: true },
+        { id: 'B', text: 'A feeling of deep sadness', correct: false },
+        { id: 'C', text: 'A planned achievement', correct: false },
+        { id: 'D', text: 'A difficult challenge', correct: false }
+      ],
+      spellingLetters: ['S', 'E', 'R', 'E', 'N', 'D', 'I', 'P', 'I', 'T', 'Y'].sort(() => Math.random() - 0.5),
+      usageOptions: [
+        { id: 'A', text: 'Finding my soulmate at a random coffee shop was pure serendipity', correct: true },
+        { id: 'B', text: 'I serendipity my homework every night', correct: false },
+        { id: 'C', text: 'The serendipity weather ruined our picnic', correct: false },
+        { id: 'D', text: 'She serendipity walked to the store yesterday', correct: false }
+      ],
+      definition: 'A pleasant surprise or discovery'
+    };
+  }
+};
 
   // Fallback to offline lesson if API fails
   const loadFallbackLesson = () => {

@@ -1,11 +1,27 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
 
-export default function LearningGoalsScreen({ navigation }) {
+export default function LearningGoalsScreen({ navigation, route }) {
   const [selectedGoals, setSelectedGoals] = useState([]);
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
+  // Get assessment data from previous screen
+  const {
+    userLevel = 'Beginner',
+    score = 0,
+    totalWords = 24,
+    correctAnswers = 0,
+    percentile = 50,
+    selectedWords = []
+  } = route?.params || {};
 
   const learningGoals = [
     {
@@ -52,33 +68,133 @@ export default function LearningGoalsScreen({ navigation }) {
     }
   ];
 
+  useEffect(() => {
+    // Start animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   const toggleGoal = (goalId) => {
     if (selectedGoals.includes(goalId)) {
       setSelectedGoals(selectedGoals.filter(id => id !== goalId));
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } else {
       setSelectedGoals([...selectedGoals, goalId]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
   const handleNext = () => {
     console.log("Selected Goals:", selectedGoals);
-    navigation.navigate('Main');
+    console.log("Assessment Data:", { userLevel, score, correctAnswers, percentile });
+    
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Navigate to Signup with both assessment and goals data
+    navigation.navigate('Signup', {
+      userLevel,
+      score,
+      totalWords,
+      correctAnswers,
+      percentile,
+      selectedWords,
+      learningGoals: selectedGoals
+    });
+  };
+
+  const handleSkip = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('Signup', {
+      userLevel,
+      score,
+      totalWords,
+      correctAnswers,
+      percentile,
+      selectedWords,
+      learningGoals: []
+    });
+  };
+
+  const getLevelEmoji = () => {
+    switch (userLevel) {
+      case 'Beginner': return '🌱';
+      case 'Intermediate': return '🌿';
+      case 'Advanced': return '🌳';
+      default: return '📚';
+    }
+  };
+
+  const getLevelColor = () => {
+    switch (userLevel) {
+      case 'Beginner': return '#22c55e';
+      case 'Intermediate': return '#3b82f6';
+      case 'Advanced': return '#8b5cf6';
+      default: return '#6b7280';
+    }
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       
-      <View style={styles.header}>
-        <Text style={styles.title}>What would you like to achieve?</Text>
-        <Text style={styles.subtitle}>
-          Choose your learning goals to personalize your experience
-        </Text>
-      </View>
+      {/* Header with Black Gradient */}
+      <LinearGradient
+        colors={['#000', '#2d3436']}
+        style={styles.headerGradient}
+      >
+        <Animated.View 
+          style={[
+            styles.header,
+            {
+              opacity: fadeAnim,
+              transform: [{
+                translateY: slideAnim.interpolate({
+                  inputRange: [0, 50],
+                  outputRange: [0, 25],
+                })
+              }]
+            }
+          ]}
+        >
+          {/* Assessment Results Summary */}
+          <View style={styles.resultsSummary}>
+            <View style={[styles.levelBadge, { backgroundColor: getLevelColor() }]}>
+              <Text style={styles.levelEmoji}>{getLevelEmoji()}</Text>
+              <Text style={styles.levelText}>{userLevel}</Text>
+            </View>
+            <Text style={styles.assessmentText}>
+              You know {correctAnswers} out of {totalWords} words
+            </Text>
+          </View>
+
+          <Text style={styles.title}>What would you like to achieve?</Text>
+          <Text style={styles.subtitle}>
+            Choose your learning goals to personalize your experience
+          </Text>
+        </Animated.View>
+      </LinearGradient>
 
       <ScrollView style={styles.goalsContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.goalsGrid}>
-          {learningGoals.map((goal) => (
+        <Animated.View 
+          style={[
+            styles.goalsGrid,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          {learningGoals.map((goal, index) => (
             <TouchableOpacity
               key={goal.id}
               style={[
@@ -103,7 +219,7 @@ export default function LearningGoalsScreen({ navigation }) {
               <Text style={styles.goalDescription}>{goal.description}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </Animated.View>
       </ScrollView>
 
       <View style={styles.bottomSection}>
@@ -114,7 +230,7 @@ export default function LearningGoalsScreen({ navigation }) {
               key={dot}
               style={[
                 styles.progressDot,
-                { backgroundColor: dot === 2 ? '#000' : '#ddd' }
+                { backgroundColor: dot <= 1 ? '#000' : '#ddd' }
               ]}
             />
           ))}
@@ -136,7 +252,15 @@ export default function LearningGoalsScreen({ navigation }) {
           onPress={handleNext}
           disabled={selectedGoals.length === 0}
         >
-          <Text style={styles.nextButtonText}>Start Learning</Text>
+          <Text style={styles.nextButtonText}>Continue to Signup</Text>
+        </TouchableOpacity>
+
+        {/* Skip Option */}
+        <TouchableOpacity 
+          style={styles.skipButton}
+          onPress={handleSkip}
+        >
+          <Text style={styles.skipButtonText}>Skip for now</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -146,23 +270,56 @@ export default function LearningGoalsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f8f9fa',
     paddingHorizontal: 24,
     paddingTop: 60,
   },
+  headerGradient: {
+    paddingTop: 50,
+    paddingBottom: 20,
+    marginHorizontal: -24,
+    marginTop: -60,
+  },
   header: {
+    paddingHorizontal: 24,
     marginBottom: 30,
+  },
+  resultsSummary: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 8,
+  },
+  levelEmoji: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  levelText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  assessmentText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
   },
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#fff',
     textAlign: 'center',
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 10,
@@ -178,7 +335,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   goalCard: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#fff',
     padding: 20,
     borderRadius: 16,
     marginBottom: 16,
@@ -186,6 +343,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
     minHeight: 140,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   selectedGoalCard: {
     backgroundColor: '#f0f9ff',
@@ -249,6 +411,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     width: width * 0.85,
     alignItems: 'center',
+    marginBottom: 12,
   },
   disabledButton: {
     backgroundColor: '#ccc',
@@ -257,5 +420,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  skipButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  skipButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

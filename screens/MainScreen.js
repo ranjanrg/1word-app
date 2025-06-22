@@ -9,9 +9,6 @@ const { width } = Dimensions.get('window');
 export default function MainScreen({ navigation }) {
   const [wordsLearned, setWordsLearned] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
-  const [weeklyGoal] = useState(7);
-  const [wordsThisWeek, setWordsThisWeek] = useState(0);
-  const [weekDays, setWeekDays] = useState([]);
   const [recentWords, setRecentWords] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -27,9 +24,6 @@ export default function MainScreen({ navigation }) {
     navigation.navigate('Settings');
   };
 
-  // Calculate progress percentage
-  const progressPercentage = (wordsThisWeek / weeklyGoal) * 100;
-
   const loadUserData = async () => {
     try {
       const progress = await DataManager.getUserProgress();
@@ -37,12 +31,7 @@ export default function MainScreen({ navigation }) {
       
       setWordsLearned(progress.wordsLearned);
       setCurrentStreak(progress.currentStreak);
-      setWeekDays(progress.weeklyProgress);
       setRecentWords(learnedWordsHistory);
-      
-      // Calculate words this week
-      const completedThisWeek = progress.weeklyProgress.filter(day => day.completed).length;
-      setWordsThisWeek(completedThisWeek);
       
       setLoading(false);
 
@@ -105,44 +94,6 @@ export default function MainScreen({ navigation }) {
       </LinearGradient>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
-        {/* Enhanced Week Progress */}
-        <Animated.View 
-          style={[
-            styles.weekContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
-          <Text style={styles.weekTitle}>This Week</Text>
-          <View style={styles.weekProgressRow}>
-            {weekDays.map((day, index) => (
-              <View key={index} style={styles.dayItem}>
-                <View style={[
-                  styles.dayCircle,
-                  day.completed && styles.completedCircle,
-                  day.isToday && styles.todayCircle
-                ]}>
-                  {day.completed ? (
-                    <Text style={styles.checkmark}>✓</Text>
-                  ) : (
-                    <Text style={[styles.dayLetter, day.isToday && styles.todayLetter]}>{day.day}</Text>
-                  )}
-                </View>
-                <Text style={[
-                  styles.dayDate,
-                  day.isToday && styles.todayDate
-                ]}>{day.date}</Text>
-              </View>
-            ))}
-          </View>
-          <View style={styles.weekProgressBar}>
-            <View style={[styles.weekProgressFill, { width: `${progressPercentage}%` }]} />
-          </View>
-          <Text style={styles.weekProgressText}>{wordsThisWeek} of {weeklyGoal} words this week</Text>
-        </Animated.View>
 
         {/* Enhanced Stats Cards */}
         <Animated.View 
@@ -263,36 +214,6 @@ export default function MainScreen({ navigation }) {
           )}
         </Animated.View>
 
-        {/* Achievement Section */}
-        <Animated.View 
-          style={[
-            styles.achievementSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
-          <Text style={styles.sectionTitle}>Achievements</Text>
-          <View style={styles.achievementGrid}>
-            <View style={[styles.achievementCard, wordsLearned >= 1 && styles.achievementUnlocked]}>
-              <Text style={styles.achievementEmoji}>🎯</Text>
-              <Text style={styles.achievementTitle}>First Word</Text>
-              <Text style={styles.achievementDesc}>Learn your first word</Text>
-            </View>
-            <View style={[styles.achievementCard, currentStreak >= 3 && styles.achievementUnlocked]}>
-              <Text style={styles.achievementEmoji}>🔥</Text>
-              <Text style={styles.achievementTitle}>3-Day Streak</Text>
-              <Text style={styles.achievementDesc}>Learn for 3 days straight</Text>
-            </View>
-            <View style={[styles.achievementCard, wordsLearned >= 10 && styles.achievementUnlocked]}>
-              <Text style={styles.achievementEmoji}>📚</Text>
-              <Text style={styles.achievementTitle}>Word Master</Text>
-              <Text style={styles.achievementDesc}>Learn 10 words</Text>
-            </View>
-          </View>
-        </Animated.View>
-
         {/* Bottom Spacing */}
         <View style={{ height: 120 }} />
       </ScrollView>
@@ -399,100 +320,6 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
-  },
-  weekContainer: {
-    backgroundColor: '#fff',
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  weekTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  weekProgressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  dayItem: {
-    alignItems: 'center',
-  },
-  dayCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f5f5f5',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    marginBottom: 8,
-  },
-  completedCircle: {
-    backgroundColor: '#000',
-    borderColor: '#fff',
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  todayCircle: {
-    borderColor: '#007AFF',
-    backgroundColor: '#E3F2FD',
-    borderWidth: 2,
-  },
-  dayLetter: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  todayLetter: {
-    color: '#007AFF',
-    fontWeight: 'bold',
-  },
-  checkmark: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  dayDate: {
-    fontSize: 12,
-    color: '#999',
-    fontWeight: '500',
-  },
-  todayDate: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  weekProgressBar: {
-    height: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  weekProgressFill: {
-    height: '100%',
-    backgroundColor: '#000',
-    borderRadius: 3,
-  },
-  weekProgressText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    fontWeight: '500',
   },
   statsContainer: {
     marginHorizontal: 20,
@@ -751,52 +578,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
-  },
-  achievementSection: {
-    paddingHorizontal: 20,
-    marginTop: 32,
-  },
-  achievementGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  achievementCard: {
-    backgroundColor: '#fff',
-    flex: 1,
-    marginHorizontal: 4,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    opacity: 0.5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  achievementUnlocked: {
-    opacity: 1,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  achievementEmoji: {
-    fontSize: 24,
-    marginBottom: 8,
-  },
-  achievementTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  achievementDesc: {
-    fontSize: 10,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 14,
   },
   bottomNav: {
     flexDirection: 'row',

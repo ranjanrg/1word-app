@@ -7,8 +7,9 @@ import {
   ScrollView, 
   Animated,
   Dimensions,
-  Alert
+  StatusBar
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
 import * as Haptics from 'expo-haptics';
 
@@ -79,33 +80,52 @@ const WordCard = ({ wordObj, isSelected, onPress, index }) => {
 
   useEffect(() => {
     // Staggered entrance animation
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      delay: index * 30,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay: index * 40,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        delay: index * 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   const handlePress = () => {
     // Haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    // Scale animation
+    // Animation sequence
     Animated.sequence([
       Animated.timing(scaleAnim, {
         toValue: 0.95,
         duration: 100,
         useNativeDriver: true,
       }),
-      Animated.timing(scaleAnim, {
+      Animated.spring(scaleAnim, {
         toValue: 1,
-        duration: 100,
+        tension: 300,
+        friction: 10,
         useNativeDriver: true,
       }),
     ]).start();
 
     onPress(wordObj);
+  };
+
+  const getDifficultyColor = () => {
+    switch (wordObj.difficulty) {
+      case 'easy': return '#22c55e';
+      case 'medium': return '#f59e0b';
+      case 'hard': return '#ef4444';
+      default: return '#6b7280';
+    }
   };
 
   return (
@@ -126,6 +146,10 @@ const WordCard = ({ wordObj, isSelected, onPress, index }) => {
         onPress={handlePress}
         activeOpacity={0.8}
       >
+        {/* Difficulty indicator */}
+        <View style={[styles.difficultyIndicator, { backgroundColor: getDifficultyColor() }]} />
+        
+        {/* Word text */}
         <Text style={[
           styles.wordText,
           isSelected && styles.selectedWordText,
@@ -135,9 +159,9 @@ const WordCard = ({ wordObj, isSelected, onPress, index }) => {
         
         {/* Selection indicator */}
         {isSelected && (
-          <Animated.View style={styles.selectionIndicator}>
+          <View style={styles.selectionIndicator}>
             <Text style={styles.checkmark}>✓</Text>
-          </Animated.View>
+          </View>
         )}
       </TouchableOpacity>
     </Animated.View>
@@ -148,19 +172,36 @@ const AssessmentScreen = ({ navigation }) => {
   const [selectedWords, setSelectedWords] = useState([]);
   const [vocabularyOptions, setVocabularyOptions] = useState([]);
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
 
   useEffect(() => {
     // Shuffle vocabulary and take first 24 words for assessment
     const shuffledVocab = shuffleArray(ASSESSMENT_VOCABULARY).slice(0, 24);
     setVocabularyOptions(shuffledVocab);
+
+    // Start animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   useEffect(() => {
-    // Animate progress bar
-    const progress = selectedWords.length / vocabularyOptions.length;
-    Animated.timing(progressAnim, {
+    // Progress bar animation
+    const progress = vocabularyOptions.length > 0 ? selectedWords.length / vocabularyOptions.length : 0;
+    Animated.spring(progressAnim, {
       toValue: progress,
-      duration: 300,
+      tension: 60,
+      friction: 8,
       useNativeDriver: false,
     }).start();
   }, [selectedWords, vocabularyOptions]);
@@ -171,6 +212,8 @@ const AssessmentScreen = ({ navigation }) => {
       setSelectedWords(selectedWords.filter(w => w !== word));
     } else {
       setSelectedWords([...selectedWords, word]);
+      // Haptic feedback for selection
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
@@ -217,23 +260,15 @@ const AssessmentScreen = ({ navigation }) => {
     // Haptic feedback for completion
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
-    // Show assessment results and navigate to signup
-    Alert.alert(
-      'Assessment Complete!',
-      `Great job! We've determined your level as ${userLevel}. You're familiar with ${correctAnswers} out of ${totalWords} words. Let's create your account to start learning!`,
-      [
-        {
-          text: 'Continue',
-          onPress: () => navigation.navigate('Signup', {
-            userLevel,
-            score,
-            totalWords,
-            correctAnswers,
-            percentile
-          })
-        }
-      ]
-    );
+    // Navigate to LearningGoals with assessment data
+    navigation.navigate('LearningGoals', {
+      userLevel,
+      score,
+      totalWords,
+      correctAnswers,
+      percentile,
+      selectedWords
+    });
   };
 
   const clearAll = () => {
@@ -241,54 +276,88 @@ const AssessmentScreen = ({ navigation }) => {
     setSelectedWords([]);
   };
 
-  const getProgressText = () => {
-    const progress = Math.round((selectedWords.length / vocabularyOptions.length) * 100);
-    if (progress === 0) return "Let's get started";
-    if (progress < 50) return "Keep going";
-    if (progress < 80) return "Great progress";
-    return "Almost done";
+  const getStats = () => {
+    const easy = selectedWords.filter(w => vocabularyOptions.find(v => v.word === w && v.difficulty === 'easy')).length;
+    const medium = selectedWords.filter(w => vocabularyOptions.find(v => v.word === w && v.difficulty === 'medium')).length;
+    const hard = selectedWords.filter(w => vocabularyOptions.find(v => v.word === w && v.difficulty === 'hard')).length;
+    return { easy, medium, hard };
   };
+
+  const stats = getStats();
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.titleSection}>
-          <Text style={styles.title}>Which words do you know?</Text>
-          <Text style={styles.subtitle}>Tap the words you're familiar with</Text>
-        </View>
-        
-        {/* Progress Section */}
-        <View style={styles.progressSection}>
-          <View style={styles.progressInfo}>
-            <Text style={styles.progressText}>{getProgressText()}</Text>
-            <Text style={styles.counter}>{selectedWords.length} of {vocabularyOptions.length}</Text>
+      <StatusBar style="light" />
+      
+      {/* Header with Black Gradient */}
+      <LinearGradient
+        colors={['#000', '#2d3436']}
+        style={styles.headerGradient}
+      >
+        <Animated.View 
+          style={[
+            styles.header,
+            {
+              opacity: fadeAnim,
+              transform: [{
+                translateY: slideAnim.interpolate({
+                  inputRange: [0, 50],
+                  outputRange: [0, 25],
+                })
+              }]
+            }
+          ]}
+        >
+          {/* Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.title}>Vocabulary Assessment</Text>
+            <Text style={styles.subtitle}>
+              Tap the words you're familiar with to personalize your learning
+            </Text>
           </View>
           
-          <View style={styles.progressBarContainer}>
-            <Animated.View 
-              style={[
-                styles.progressBar,
-                {
-                  width: progressAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%'],
-                  }),
-                },
-              ]} 
-            />
+          {/* Progress Section */}
+          <View style={styles.progressSection}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressLabel}>{selectedWords.length} of {vocabularyOptions.length} words selected</Text>
+              <TouchableOpacity onPress={clearAll} style={styles.resetButton}>
+                <Text style={styles.resetText}>Reset</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Progress Bar */}
+            <View style={styles.progressBarContainer}>
+              <Animated.View 
+                style={[
+                  styles.progressBar,
+                  {
+                    width: progressAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%'],
+                    }),
+                  },
+                ]} 
+              />
+            </View>
+
+            {/* Stats */}
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <View style={[styles.statDot, { backgroundColor: '#22c55e' }]} />
+                <Text style={styles.statText}>Easy: {stats.easy}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <View style={[styles.statDot, { backgroundColor: '#f59e0b' }]} />
+                <Text style={styles.statText}>Medium: {stats.medium}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <View style={[styles.statDot, { backgroundColor: '#ef4444' }]} />
+                <Text style={styles.statText}>Hard: {stats.hard}</Text>
+              </View>
+            </View>
           </View>
-        </View>
-        
-        {/* Quick Actions */}
-        {selectedWords.length > 0 && (
-          <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.clearButton} onPress={clearAll}>
-              <Text style={styles.clearButtonText}>Clear All</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+        </Animated.View>
+      </LinearGradient>
 
       {/* Words Grid */}
       <ScrollView 
@@ -296,7 +365,15 @@ const AssessmentScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.wordsGrid}>
+        <Animated.View 
+          style={[
+            styles.wordsGrid,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           {vocabularyOptions.map((wordObj, index) => (
             <WordCard
               key={wordObj.word}
@@ -306,7 +383,7 @@ const AssessmentScreen = ({ navigation }) => {
               index={index}
             />
           ))}
-        </View>
+        </Animated.View>
         
         <View style={styles.bottomSpacing} />
       </ScrollView>
@@ -325,12 +402,12 @@ const AssessmentScreen = ({ navigation }) => {
             styles.continueButtonText,
             selectedWords.length === 0 && styles.continueButtonTextDisabled
           ]}>
-            Complete Assessment
+            {selectedWords.length > 0 ? 'Continue to Learning Goals' : 'Select words to continue'}
           </Text>
         </TouchableOpacity>
         
         <Text style={styles.helpText}>
-          Don't worry if you don't know some words - that's how we learn!
+          Don't worry about being perfect - this helps us understand your level!
         </Text>
       </View>
     </View>
@@ -340,80 +417,95 @@ const AssessmentScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
+  headerGradient: {
+    paddingTop: 50,
     paddingBottom: 20,
   },
+  header: {
+    paddingHorizontal: 20,
+  },
   titleSection: {
+    alignItems: 'center',
     marginBottom: 24,
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
+    fontWeight: 'bold',
+    color: '#fff',
     marginBottom: 8,
-    letterSpacing: -0.5,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: 'rgba(255,255,255,0.8)',
     lineHeight: 22,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   progressSection: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  progressInfo: {
+  progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  progressText: {
+  progressLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000',
+    color: '#fff',
   },
-  counter: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+  resetButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+  },
+  resetText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
   },
   progressBarContainer: {
-    height: 4,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 2,
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 3,
     overflow: 'hidden',
+    marginBottom: 16,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#000',
-    borderRadius: 2,
+    backgroundColor: '#fff',
+    borderRadius: 3,
   },
-  quickActions: {
-    alignItems: 'flex-end',
-    marginTop: 16,
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
-  clearButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  clearButtonText: {
-    fontSize: 14,
-    color: '#666',
+  statDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
     fontWeight: '500',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   wordsGrid: {
     flexDirection: 'row',
@@ -421,11 +513,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   wordCardContainer: {
-    width: (width - 60) / 2, // Account for padding and gap
-    marginBottom: 12,
+    width: (width - 60) / 2,
+    marginBottom: 16,
   },
   wordCard: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#fff',
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 16,
@@ -436,25 +528,25 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     position: 'relative',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   selectedWordCard: {
-    backgroundColor: '#000',
+    backgroundColor: '#f0f9ff',
     borderColor: '#000',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.2,
+    elevation: 8,
+  },
+  difficultyIndicator: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   wordText: {
     fontSize: 16,
@@ -464,8 +556,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   selectedWordText: {
-    color: '#fff',
-    fontWeight: '700',
+    color: '#000',
+    fontWeight: 'bold',
   },
   selectionIndicator: {
     position: 'absolute',
@@ -473,60 +565,49 @@ const styles = StyleSheet.create({
     right: 8,
     width: 20,
     height: 20,
-    backgroundColor: '#fff',
     borderRadius: 10,
+    backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkmark: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#fff',
   },
   bottomSpacing: {
-    height: 40,
+    height: 100,
   },
   footer: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
   continueButton: {
     backgroundColor: '#000',
-    borderRadius: 16,
-    paddingVertical: 18,
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
   continueButtonDisabled: {
-    backgroundColor: '#f0f0f0',
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: '#e5e7eb',
   },
   continueButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#fff',
-    letterSpacing: 0.5,
   },
   continueButtonTextDisabled: {
-    color: '#999',
+    color: '#9ca3af',
   },
   helpText: {
-    fontSize: 13,
-    color: '#999',
+    fontSize: 14,
+    color: '#666',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 20,
   },
 });
 

@@ -1,8 +1,8 @@
 import config from '../config.js';
 
-// ⚠️ IMPORTANT: Replace with your actual API key
-const CLAUDE_API_KEY = config.CLAUDE_API_KEY;
-const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
+// ⚠️ IMPORTANT: Add your OpenAI API key to config.js
+const OPENAI_API_KEY = config.OPENAI_API_KEY || 'your-openai-api-key-here';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 class ClaudeService {
   
@@ -11,47 +11,56 @@ class ClaudeService {
     try {
       const prompt = this.createWordGenerationPrompt(userLevel, previousWords);
       
-      console.log('🔑 Making API request to Claude...');
-      console.log('🔍 API Key length:', CLAUDE_API_KEY ? CLAUDE_API_KEY.length : 'undefined');
-      console.log('🔍 API Key starts with:', CLAUDE_API_KEY ? CLAUDE_API_KEY.substring(0, 10) + '...' : 'undefined');
+      console.log('🔑 Making API request to OpenAI...');
+      console.log('🔍 API Key length:', OPENAI_API_KEY ? OPENAI_API_KEY.length : 'undefined');
+      console.log('🔍 API Key starts with:', OPENAI_API_KEY ? OPENAI_API_KEY.substring(0, 10) + '...' : 'undefined');
       
       const requestBody = {
-        model: 'claude-3-sonnet-20240229', // Updated to working model
+        model: 'gpt-3.5-turbo', // Cost-effective model
         max_tokens: 1500,
-        messages: [{
-          role: 'user',
-          content: prompt
-        }]
+        temperature: 0.7,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert vocabulary teacher creating engaging word lessons. Always respond with valid JSON only, no additional text.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
       };
 
       console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
       
-      // Replace axios with fetch
-      const response = await fetch(CLAUDE_API_URL, {
+      const response = await fetch(OPENAI_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_API_KEY,
-          'anthropic-version': '2023-06-01'
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify(requestBody)
       });
 
       console.log('📥 Response status:', response.status);
-      console.log('📥 Response headers:', response.headers);
+      console.log('📥 Response headers:', JSON.stringify(Object.fromEntries(response.headers), null, 2));
 
       if (!response.ok) {
         // Get detailed error info
-        const errorText = await response.text();
-        console.error('❌ API Error Details:', errorText);
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+        const errorData = await response.json();
+        console.error('❌ API Error Details:', errorData);
+        throw new Error(`API request failed: ${response.status}  - ${JSON.stringify(errorData)}`);
       }
 
       const data = await response.json();
-      console.log('✅ Got response from Claude!');
+      console.log('✅ Got response from OpenAI!');
       console.log('📊 Response data:', JSON.stringify(data, null, 2));
       
-      const content = data.content[0].text;
+      const content = data.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No content in OpenAI response');
+      }
+      
       return this.parseWordLesson(content);
       
     } catch (error) {
@@ -61,7 +70,7 @@ class ClaudeService {
     }
   }
 
-  // Create the prompt for Claude to generate vocabulary lessons
+  // Create the prompt for OpenAI to generate vocabulary lessons
   static createWordGenerationPrompt(userLevel, previousWords) {
     const excludeWords = previousWords.length > 0 
       ? `\nDo not use these previously learned words: ${previousWords.join(', ')}`
@@ -71,7 +80,7 @@ class ClaudeService {
 
 ${excludeWords}
 
-Please provide your response in exactly this JSON format:
+Please provide your response in exactly this JSON format (no additional text):
 
 {
   "word": "the target word in lowercase",
@@ -98,19 +107,28 @@ Requirements:
 - Wrong answers should be believable but clearly different
 - Usage examples should be realistic scenarios
 - Keep everything concise and clear
+- Respond with ONLY the JSON object, no extra text
 
 Generate the lesson now:`;
   }
 
-  // Parse Claude's response into structured data
+  // Parse OpenAI's response into structured data
   static parseWordLesson(content) {
     try {
       console.log('🔍 Parsing content:', content);
       
-      // Extract JSON from Claude's response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      // Clean the content - remove any markdown formatting or extra text
+      let cleanContent = content.trim();
+      
+      // Remove markdown code blocks if present
+      cleanContent = cleanContent.replace(/```json\n?/g, '');
+      cleanContent = cleanContent.replace(/```\n?/g, '');
+      
+      // Extract JSON from the response
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         console.error('❌ No JSON found in response');
+        console.error('📄 Raw content:', content);
         throw new Error('No JSON found in response');
       }
 
@@ -140,6 +158,7 @@ Generate the lesson now:`;
 
     } catch (error) {
       console.error('❌ Error parsing word lesson:', error);
+      console.error('📄 Original content:', content);
       return this.getFallbackLesson();
     }
   }
@@ -148,40 +167,59 @@ Generate the lesson now:`;
   static generateStepsFromLesson(lesson) {
     console.log('🔧 Generating steps from lesson:', lesson);
     
-    return {
+    // Ensure lesson object has all required properties
+    const safeLesson = {
+      word: lesson.word || 'serendipity',
+      emoji: lesson.emoji || '📚',
+      story: lesson.story || 'This is a story about learning new words.',
+      definition: lesson.definition || 'A word to learn',
+      wrongAnswers: lesson.wrongAnswers || ['Wrong 1', 'Wrong 2', 'Wrong 3'],
+      spellingHint: lesson.spellingHint || 'Think about the spelling',
+      usageOptions: lesson.usageOptions || [
+        'This is correct usage',
+        'This is wrong usage 1',
+        'This is wrong usage 2', 
+        'This is wrong usage 3'
+      ]
+    };
+
+    const steps = {
       1: {
         type: 'discovery',
-        story: lesson.story,
+        story: safeLesson.story,
         options: [
-          lesson.word,
-          this.generateSimilarWord(lesson.word),
-          this.generateSimilarWord(lesson.word),
-          this.generateSimilarWord(lesson.word)
+          safeLesson.word,
+          this.generateSimilarWord(safeLesson.word),
+          this.generateSimilarWord(safeLesson.word),
+          this.generateSimilarWord(safeLesson.word)
         ].sort(() => Math.random() - 0.5), // Shuffle options
-        correctAnswer: lesson.word
+        correctAnswer: safeLesson.word
       },
       2: {
         type: 'meaning',
-        question: `What does "${lesson.word}" mean?`,
+        question: `What does "${safeLesson.word}" mean?`,
         options: [
-          lesson.definition,
-          ...lesson.wrongAnswers.slice(0, 3)
+          safeLesson.definition,
+          ...safeLesson.wrongAnswers.slice(0, 3)
         ].sort(() => Math.random() - 0.5),
-        correctAnswer: lesson.definition
+        correctAnswer: safeLesson.definition
       },
       3: {
         type: 'spelling',
-        hint: lesson.spellingHint,
-        letters: lesson.word.toUpperCase().split('').sort(() => Math.random() - 0.5),
-        correctWord: lesson.word.toUpperCase()
+        hint: safeLesson.spellingHint,
+        letters: safeLesson.word.toUpperCase().split('').sort(() => Math.random() - 0.5),
+        correctWord: safeLesson.word.toUpperCase()
       },
       4: {
         type: 'usage',
-        question: `Which sentence uses "${lesson.word}" correctly?`,
-        options: lesson.usageOptions.slice(0, 4),
-        correctAnswer: lesson.usageOptions[0] // First option is correct
+        question: `Which sentence uses "${safeLesson.word}" correctly?`,
+        options: safeLesson.usageOptions.slice(0, 4),
+        correctAnswer: safeLesson.usageOptions[0] // First option is correct
       }
     };
+
+    console.log('✅ Generated steps:', JSON.stringify(steps, null, 2));
+    return steps;
   }
 
   // Generate similar-looking words for discovery options
@@ -199,10 +237,11 @@ Generate the lesson now:`;
     }
   }
 
-  // Fallback lesson when API fails
+  // Enhanced fallback lesson when API fails
   static getFallbackLesson() {
     console.log('📚 Using fallback lesson');
-    return {
+    
+    const fallbackData = {
       targetWord: 'serendipity',
       emoji: '✨',
       story: 'Maya was looking for a coffee shop when she stumbled upon a tiny bookstore. Inside, she found the exact rare novel she had been searching for months. This unexpected discovery filled her with joy.',
@@ -218,44 +257,25 @@ Generate the lesson now:`;
         'I serendipity my homework every night',
         'The serendipity weather ruined our picnic',
         'She serendipity walked to the store yesterday'
-      ],
-      steps: {
-        1: {
-          type: 'discovery',
-          story: 'Maya was looking for a coffee shop when she stumbled upon a tiny bookstore. Inside, she found the exact rare novel she had been searching for months. This unexpected discovery filled her with joy.',
-          options: ['serendipity', 'melancholy', 'perseverance', 'hypothesis'],
-          correctAnswer: 'serendipity'
-        },
-        2: {
-          type: 'meaning',
-          question: 'What does "serendipity" mean?',
-          options: [
-            'A pleasant surprise or discovery',
-            'A feeling of deep sadness',
-            'A planned achievement',
-            'A difficult challenge'
-          ],
-          correctAnswer: 'A pleasant surprise or discovery'
-        },
-        3: {
-          type: 'spelling',
-          hint: 'Starts with "ser" and ends with "ity"',
-          letters: ['S', 'E', 'R', 'E', 'N', 'D', 'I', 'P', 'I', 'T', 'Y'].sort(() => Math.random() - 0.5),
-          correctWord: 'SERENDIPITY'
-        },
-        4: {
-          type: 'usage',
-          question: 'Which sentence uses "serendipity" correctly?',
-          options: [
-            'Finding my soulmate at a random coffee shop was pure serendipity',
-            'I serendipity my homework every night',
-            'The serendipity weather ruined our picnic',
-            'She serendipity walked to the store yesterday'
-          ],
-          correctAnswer: 'Finding my soulmate at a random coffee shop was pure serendipity'
-        }
-      }
+      ]
     };
+
+    // Generate complete lesson structure
+    const lesson = {
+      ...fallbackData,
+      steps: this.generateStepsFromLesson({
+        word: fallbackData.targetWord,
+        emoji: fallbackData.emoji,
+        story: fallbackData.story,
+        definition: fallbackData.definition,
+        wrongAnswers: fallbackData.wrongAnswers,
+        spellingHint: fallbackData.spellingHint,
+        usageOptions: fallbackData.usageOptions
+      })
+    };
+
+    console.log('✅ Fallback lesson structure:', JSON.stringify(lesson, null, 2));
+    return lesson;
   }
 
   // Get user's learning level from storage
@@ -292,7 +312,16 @@ Generate the lesson now:`;
       console.log('👤 User level:', userLevel);
       console.log('📝 Previous words:', previousWords);
       
-      return await this.generateWordLesson(userLevel, previousWords);
+      const lesson = await this.generateWordLesson(userLevel, previousWords);
+      
+      // Validate lesson structure before returning
+      if (!lesson || !lesson.targetWord || !lesson.steps) {
+        console.error('❌ Invalid lesson structure, using fallback');
+        return this.getFallbackLesson();
+      }
+
+      console.log('✅ Valid lesson generated:', lesson.targetWord);
+      return lesson;
     } catch (error) {
       console.error('❌ Error getting new lesson:', error);
       return this.getFallbackLesson();
@@ -302,22 +331,21 @@ Generate the lesson now:`;
   // Test the API connection with simpler request
   static async testConnection() {
     try {
-      console.log('🧪 Testing API connection...');
-      console.log('🔍 API Key check:', CLAUDE_API_KEY ? 'Present' : 'Missing');
+      console.log('🧪 Testing OpenAI API connection...');
+      console.log('🔍 API Key check:', OPENAI_API_KEY ? 'Present' : 'Missing');
       
-      if (!CLAUDE_API_KEY) {
-        throw new Error('API key is missing');
+      if (!OPENAI_API_KEY || OPENAI_API_KEY === 'your-openai-api-key-here') {
+        throw new Error('OpenAI API key is missing or not configured');
       }
 
-      const response = await fetch(CLAUDE_API_URL, {
+      const response = await fetch(OPENAI_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_API_KEY,
-          'anthropic-version': '2023-06-01'
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'claude-3-sonnet-20240229',
+          model: 'gpt-3.5-turbo',
           max_tokens: 50,
           messages: [{
             role: 'user',
@@ -329,18 +357,35 @@ Generate the lesson now:`;
       console.log('🧪 Test response status:', response.status);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ API test failed:', errorText);
-        throw new Error(`API test failed: ${response.status} ${response.statusText} - ${errorText}`);
+        const errorData = await response.json();
+        console.error('❌ API test failed:', errorData);
+        throw new Error(`API test failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
       }
 
       const data = await response.json();
       console.log('✅ Test successful:', data);
-      return data.content[0].text.includes('successful');
+      return data.choices[0]?.message?.content?.includes('successful') || false;
     } catch (error) {
-      console.error('❌ API connection test failed:', error.message);
+      console.error('❌ OpenAI API connection test failed:', error.message);
       return false;
     }
+  }
+
+  // Helper method to check if API is configured
+  static isApiConfigured() {
+    return OPENAI_API_KEY && OPENAI_API_KEY !== 'your-openai-api-key-here';
+  }
+
+  // Get API status
+  static getApiStatus() {
+    return {
+      provider: 'OpenAI',
+      isConfigured: this.isApiConfigured(),
+      keyPreview: OPENAI_API_KEY 
+        ? `${OPENAI_API_KEY.substring(0, 8)}...${OPENAI_API_KEY.substring(OPENAI_API_KEY.length - 4)}`
+        : 'Not configured',
+      model: 'gpt-3.5-turbo'
+    };
   }
 }
 
