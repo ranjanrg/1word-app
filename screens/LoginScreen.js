@@ -1,112 +1,122 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Alert,
-  Animated
-} from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../supabase.config';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const LoginScreen = ({ navigation }) => {
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [scaleAnim] = useState(new Animated.Value(1));
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { signIn } = useAuth();
 
-  const handleGoogleSignIn = async () => {
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      Alert.alert('Missing Fields', 'Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
+    console.log('🔐 Signing in with:', email);
+
     try {
-      setIsGoogleLoading(true);
-      console.log('🔄 Starting Google Sign-In...');
+      const result = await signIn(email, password);
       
-      // Button animation
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 0.95,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      
-      // Use Supabase Google auth
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-      });
-
-      if (error) {
-        console.error('❌ Google sign-in error:', error);
-        Alert.alert('Error', 'Failed to sign in with Google. Please try again.');
-        return;
+      if (result.success) {
+        console.log('✅ Login successful!');
+        Alert.alert('Welcome Back!', 'You have successfully signed in.');
+        // Navigation will be handled automatically by AuthContext
+      } else {
+        console.error('❌ Login failed:', result.error);
+        Alert.alert('Login Failed', result.error);
       }
-
-      console.log('✅ Google sign-in initiated:', data);
-      
     } catch (error) {
-      console.error('💥 Google Sign-In error:', error);
-      Alert.alert('Error', 'Failed to sign in with Google. Please try again.');
+      console.error('💥 Login error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
-      setIsGoogleLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleCreateAccount = () => {
-    navigation.navigate('Assessment');
+  const goToSignUp = () => {
+    navigation.navigate('Signup');
+  };
+
+  const goToForgotPassword = () => {
+    navigation.navigate('ForgotPassword');
+  };
+
+  const goBack = () => {
+    navigation.goBack();
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
-      
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
+        <TouchableOpacity style={styles.backButton} onPress={goBack}>
+          <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Welcome Back</Text>
-        <View style={styles.placeholder} />
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.subtitle}>Sign in to your account</Text>
       </View>
 
-      {/* Centered Content */}
-      <View style={styles.centerContainer}>
+      <View style={styles.formContainer}>
+        <Text style={styles.label}>Email Address</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your email"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
         
-        {/* Google Sign-In Button */}
-        <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
-          <TouchableOpacity 
-            style={[styles.googleButton, isGoogleLoading && styles.disabledButton]}
-            onPress={handleGoogleSignIn}
-            disabled={isGoogleLoading}
-          >
-            <LinearGradient
-              colors={['#fff', '#f8f9fa']}
-              style={styles.googleGradient}
-            >
-              <View style={styles.googleContent}>
-                <View style={styles.googleIconContainer}>
-                  <Text style={styles.googleIcon}>🔍</Text>
-                </View>
-                <Text style={styles.googleButtonText}>
-                  {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
-                </Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
+        <Text style={styles.label}>Password</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
+        
+        <TouchableOpacity 
+          style={styles.forgotPasswordButton}
+          onPress={goToForgotPassword}
+          disabled={isLoading}
+        >
+          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.button, isLoading && styles.buttonDisabled]}
+          onPress={handleSignIn}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>
+            {isLoading ? 'Signing In...' : 'Sign In'}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.secondaryButton}
+          onPress={goToSignUp}
+          disabled={isLoading}
+        >
+          <Text style={styles.secondaryButtonText}>
+            Don't have an account? Sign Up
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* Create Account Prompt */}
-        <View style={styles.createPrompt}>
-          <Text style={styles.createPromptText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={handleCreateAccount} disabled={isGoogleLoading}>
-            <Text style={[styles.createLink, isGoogleLoading && { color: '#ccc' }]}>Create Account</Text>
-          </TouchableOpacity>
-        </View>
-        
+      {/* Help Text */}
+      <View style={styles.helpContainer}>
+        <Text style={styles.helpText}>
+          Enter your email and password to access your vocabulary learning progress.
+        </Text>
       </View>
     </View>
   );
@@ -115,84 +125,108 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 24,
+    paddingTop: 60,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
+    marginBottom: 40,
   },
   backButton: {
-    fontSize: 24,
-    color: '#000',
+    alignSelf: 'flex-start',
+    marginBottom: 20,
+    padding: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  title: {
+    fontSize: 28,
     fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
   },
-  placeholder: {
-    width: 24,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-  },
-  googleButton: {
+  formContainer: {
+    backgroundColor: 'white',
     borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
+    padding: 24,
     marginBottom: 24,
-    width: 280,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  googleGradient: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  googleContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-  },
-  googleIconContainer: {
-    marginRight: 12,
-  },
-  googleIcon: {
-    fontSize: 24,
-  },
-  googleButtonText: {
-    fontSize: 18,
+  label: {
+    fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#374151',
+    marginBottom: 8,
   },
-  createPrompt: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 20,
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+  },
+  forgotPasswordText: {
+    color: '#3B82F6',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  buttonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
   },
-  createPromptText: {
+  secondaryButtonText: {
+    color: '#3B82F6',
     fontSize: 16,
-    color: '#666',
+    fontWeight: '500',
   },
-  createLink: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: 'bold',
+  helpContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

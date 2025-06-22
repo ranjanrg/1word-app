@@ -1,121 +1,149 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Alert,
-  Animated
-} from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../supabase.config';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
-const SignupScreen = ({ navigation, route }) => {
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [scaleAnim] = useState(new Animated.Value(1));
+const SignupScreen = ({ navigation }) => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { signUp } = useAuth();
 
-  // Get assessment results from previous screen
-  const { 
-    userLevel = 'Intermediate',
-    score = 67,
-    percentile = 73 
-  } = route?.params || {};
+  const handleSignUp = async () => {
+    // Validation
+    if (!name || !email || !password || !confirmPassword) {
+      Alert.alert('Missing Fields', 'Please fill in all fields');
+      return;
+    }
 
-  const handleGoogleSignUp = async () => {
+    if (password !== confirmPassword) {
+      Alert.alert('Password Mismatch', 'Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters long');
+      return;
+    }
+
+    setIsLoading(true);
+    console.log('🚀 Creating account for:', email);
+
     try {
-      setIsGoogleLoading(true);
-      console.log('🔄 Starting Google Sign-Up...');
-
-      // Button press animation
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 0.95,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      const result = await signUp(name, email, password, 'Beginner');
       
-      // Use Supabase Google auth
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-      });
-
-      if (error) {
-        console.error('❌ Google sign-up error:', error);
-        Alert.alert('Error', 'Failed to sign up with Google. Please try again.');
-        return;
+      if (result.success) {
+        console.log('✅ Signup successful!');
+        Alert.alert(
+          'Account Created!', 
+          'Your account has been created successfully. Welcome to VocabMaster!'
+        );
+        // Navigation will be handled automatically by AuthContext
+      } else {
+        console.error('❌ Signup failed:', result.error);
+        Alert.alert('Signup Failed', result.error);
       }
-
-      console.log('✅ Google sign-up initiated:', data);
-      
     } catch (error) {
-      console.error('💥 Google Sign-Up error:', error);
-      Alert.alert('Error', 'Failed to sign up with Google. Please try again.');
+      console.error('💥 Signup error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
-      setIsGoogleLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleLogin = () => {
+  const goToLogin = () => {
     navigation.navigate('Login');
+  };
+
+  const goBack = () => {
+    navigation.goBack();
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
-      
-      {/* Header with Gradient */}
-      <LinearGradient
-        colors={['#000', '#2d3436']}
-        style={styles.header}
-      >
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={goBack}>
+          <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Account</Text>
-        <View style={styles.placeholder} />
-      </LinearGradient>
+        <Text style={styles.title}>Create Account</Text>
+        <Text style={styles.subtitle}>Join VocabMaster today</Text>
+      </View>
 
-      {/* Centered Content */}
-      <View style={styles.centerContainer}>
+      <View style={styles.formContainer}>
+        <Text style={styles.label}>Full Name</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your full name"
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
+
+        <Text style={styles.label}>Email Address</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your email"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
         
-        {/* Google Sign-Up Button */}
-        <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
-          <TouchableOpacity 
-            style={[styles.googleButton, isGoogleLoading && styles.disabledButton]}
-            onPress={handleGoogleSignUp}
-            disabled={isGoogleLoading}
-          >
-            <LinearGradient
-              colors={['#fff', '#f8f9fa']}
-              style={styles.googleGradient}
-            >
-              <View style={styles.googleContent}>
-                <View style={styles.googleIconContainer}>
-                  <Text style={styles.googleIcon}>🔍</Text>
-                </View>
-                <Text style={styles.googleButtonText}>
-                  {isGoogleLoading ? 'Creating Account...' : 'Continue with Google'}
-                </Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
+        <Text style={styles.label}>Password</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Create a password (min 6 characters)"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
+
+        <Text style={styles.label}>Confirm Password</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Confirm your password"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
         
-        {/* Login Prompt */}
-        <View style={styles.loginPrompt}>
-          <Text style={styles.loginPromptText}>Already have an account? </Text>
-          <TouchableOpacity onPress={handleLogin} disabled={isGoogleLoading}>
-            <Text style={[styles.loginLink, isGoogleLoading && { color: '#ccc' }]}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity 
+          style={[styles.button, isLoading && styles.buttonDisabled]}
+          onPress={handleSignUp}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>
+            {isLoading ? 'Creating Account...' : 'Create Account'}
+          </Text>
+        </TouchableOpacity>
         
+        <TouchableOpacity 
+          style={styles.secondaryButton}
+          onPress={goToLogin}
+          disabled={isLoading}
+        >
+          <Text style={styles.secondaryButtonText}>
+            Already have an account? Sign In
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Help Text */}
+      <View style={styles.helpContainer}>
+        <Text style={styles.helpText}>
+          By creating an account, you'll be able to save your progress and access your vocabulary from any device.
+        </Text>
       </View>
     </View>
   );
@@ -124,84 +152,99 @@ const SignupScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 24,
+    paddingTop: 60,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 25,
+    marginBottom: 40,
   },
   backButton: {
-    fontSize: 24,
-    color: '#fff',
+    alignSelf: 'flex-start',
+    marginBottom: 20,
+    padding: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  title: {
+    fontSize: 28,
     fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
   },
-  placeholder: {
-    width: 24,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-  },
-  googleButton: {
+  formContainer: {
+    backgroundColor: 'white',
     borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    padding: 24,
     marginBottom: 24,
-    width: 280,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  googleGradient: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  googleContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-  },
-  googleIconContainer: {
-    marginRight: 12,
-  },
-  googleIcon: {
-    fontSize: 24,
-  },
-  googleButtonText: {
-    fontSize: 18,
+  label: {
+    fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#374151',
+    marginBottom: 8,
   },
-  loginPrompt: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  buttonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
   },
-  loginPromptText: {
+  secondaryButtonText: {
+    color: '#3B82F6',
     fontSize: 16,
-    color: '#666',
+    fontWeight: '500',
   },
-  loginLink: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: 'bold',
+  helpContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

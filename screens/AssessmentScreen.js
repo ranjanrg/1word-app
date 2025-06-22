@@ -7,8 +7,7 @@ import {
   ScrollView, 
   Animated,
   Dimensions,
-  PanGestureHandler,
-  State
+  Alert
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Haptics from 'expo-haptics';
@@ -218,13 +217,23 @@ const AssessmentScreen = ({ navigation }) => {
     // Haptic feedback for completion
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
-    navigation.navigate('PostAssessmentAuth', {
-      userLevel,
-      score,
-      totalWords,
-      correctAnswers,
-      percentile
-    });
+    // Show assessment results and navigate to signup
+    Alert.alert(
+      'Assessment Complete!',
+      `Great job! We've determined your level as ${userLevel}. You're familiar with ${correctAnswers} out of ${totalWords} words. Let's create your account to start learning!`,
+      [
+        {
+          text: 'Continue',
+          onPress: () => navigation.navigate('Signup', {
+            userLevel,
+            score,
+            totalWords,
+            correctAnswers,
+            percentile
+          })
+        }
+      ]
+    );
   };
 
   const clearAll = () => {
@@ -316,7 +325,7 @@ const AssessmentScreen = ({ navigation }) => {
             styles.continueButtonText,
             selectedWords.length === 0 && styles.continueButtonTextDisabled
           ]}>
-            Continue Assessment
+            Complete Assessment
           </Text>
         </TouchableOpacity>
         

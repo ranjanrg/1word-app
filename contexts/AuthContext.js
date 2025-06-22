@@ -74,7 +74,7 @@ const AUTH_ACTIONS = {
   SET_LOADING: 'SET_LOADING'
 };
 
-// Initial state
+// Initial state - FIXED: All properties properly initialized
 const initialState = {
   isLoading: true,
   isSignedIn: false,
@@ -85,16 +85,16 @@ const initialState = {
   isFirstTime: true
 };
 
-// Auth reducer
+// Auth reducer - FIXED: Ensures all state properties are always defined
 const authReducer = (prevState, action) => {
   switch (action.type) {
     case AUTH_ACTIONS.RESTORE_SESSION:
       return {
         ...prevState,
-        user: action.user,
-        userData: action.userData,
-        userLevel: action.userLevel,
-        isFirstTime: action.isFirstTime,
+        user: action.user || null,
+        userData: action.userData || null,
+        userLevel: action.userLevel || null,
+        isFirstTime: action.isFirstTime !== undefined ? action.isFirstTime : true,
         isSignedIn: !!action.user,
         isGuest: action.isGuest || false,
         isLoading: false,
@@ -105,9 +105,9 @@ const authReducer = (prevState, action) => {
         ...prevState,
         isSignedIn: true,
         isGuest: false,
-        user: action.user,
-        userData: action.userData,
-        userLevel: action.userLevel,
+        user: action.user || null,
+        userData: action.userData || null,
+        userLevel: action.userLevel || prevState.userLevel,
         isLoading: false,
       };
     
@@ -116,9 +116,9 @@ const authReducer = (prevState, action) => {
         ...prevState,
         isSignedIn: true,
         isGuest: false,
-        user: action.user,
-        userData: action.userData,
-        userLevel: action.userLevel,
+        user: action.user || null,
+        userData: action.userData || null,
+        userLevel: action.userLevel || 'Beginner',
         isFirstTime: false,
         isLoading: false,
       };
@@ -148,14 +148,17 @@ const authReducer = (prevState, action) => {
     case AUTH_ACTIONS.UPDATE_USER:
       return {
         ...prevState,
-        userData: { ...prevState.userData, ...action.userData },
+        userData: { 
+          ...(prevState.userData || {}), 
+          ...(action.userData || {}) 
+        },
         userLevel: action.userLevel || prevState.userLevel,
       };
     
     case AUTH_ACTIONS.SET_LOADING:
       return {
         ...prevState,
-        isLoading: action.isLoading,
+        isLoading: action.isLoading !== undefined ? action.isLoading : false,
       };
     
     default:
@@ -163,23 +166,28 @@ const authReducer = (prevState, action) => {
   }
 };
 
-// Storage helpers
+// Storage helpers - FIXED: Better error handling
 const storage = {
   getItem: async (key) => {
     try {
-      return await SecureStore.getItemAsync(key);
+      const value = await SecureStore.getItemAsync(key);
+      return value;
     } catch (error) {
-      console.error('Error getting item from storage:', error);
+      console.error(`Error getting ${key} from storage:`, error);
       return null;
     }
   },
   
   setItem: async (key, value) => {
     try {
-      await SecureStore.setItemAsync(key, value);
+      if (value === null || value === undefined) {
+        console.warn(`Attempted to store null/undefined value for key: ${key}`);
+        return false;
+      }
+      await SecureStore.setItemAsync(key, String(value));
       return true;
     } catch (error) {
-      console.error('Error setting item in storage:', error);
+      console.error(`Error setting ${key} in storage:`, error);
       return false;
     }
   },
@@ -189,22 +197,34 @@ const storage = {
       await SecureStore.deleteItemAsync(key);
       return true;
     } catch (error) {
-      console.error('Error removing item from storage:', error);
+      console.error(`Error removing ${key} from storage:`, error);
       return false;
     }
   }
 };
 
-// Create Auth Context
-const AuthContext = createContext({});
+// Create Auth Context with default values
+const AuthContext = createContext({
+  isLoading: true,
+  isSignedIn: false,
+  isGuest: false,
+  user: null,
+  userData: null,
+  userLevel: null,
+  isFirstTime: true,
+  isAuthenticated: false,
+  userName: 'User',
+  userEmail: null
+});
 
-// Auth Provider Component
+// Auth Provider Component - FIXED: Better state management
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
   // Initialize auth state and listen for auth changes
   useEffect(() => {
     let mounted = true;
+    let authSubscription = null;
 
     // Get initial session
     const getInitialSession = async () => {
@@ -251,21 +271,37 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Handle user session data
+    // Handle user session data - FIXED: Better null handling
     const handleUserSession = async (user) => {
       try {
+        if (!user) {
+          console.warn('handleUserSession called with null user');
+          return;
+        }
+
         // Get stored user profile and level
         const storedProfile = await storage.getItem(AUTH_STORAGE_KEYS.USER_PROFILE);
         const storedLevel = await storage.getItem(AUTH_STORAGE_KEYS.USER_LEVEL);
         const isFirstTime = await storage.getItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME);
         
-        // Create user data object
-        const userData = storedProfile ? JSON.parse(storedProfile) : {
-          id: user.id,
-          name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-          email: user.email,
-          joinDate: user.created_at
-        };
+        // Create user data object with proper fallbacks
+        let userData = null;
+        try {
+          userData = storedProfile ? JSON.parse(storedProfile) : null;
+        } catch (parseError) {
+          console.error('Error parsing stored profile:', parseError);
+          userData = null;
+        }
+
+        // Create default user data if none exists
+        if (!userData) {
+          userData = {
+            id: user.id,
+            name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+            email: user.email || '',
+            joinDate: user.created_at
+          };
+        }
 
         dispatch({
           type: AUTH_ACTIONS.RESTORE_SESSION,
@@ -278,31 +314,58 @@ export const AuthProvider = ({ children }) => {
         
       } catch (error) {
         console.error('❌ Error handling user session:', error);
+        // Even on error, make sure we have a valid state
+        dispatch({
+          type: AUTH_ACTIONS.RESTORE_SESSION,
+          user: user,
+          userData: null,
+          userLevel: 'Beginner',
+          isFirstTime: true,
+          isGuest: false
+        });
       }
     };
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔔 Auth state changed:', event);
-      
-      if (mounted) {
-        if (event === 'SIGNED_IN' && session?.user) {
-          await handleUserSession(session.user);
-        } else if (event === 'SIGNED_OUT') {
-          dispatch({ type: AUTH_ACTIONS.SIGN_OUT });
+    // Listen for auth changes - FIXED: Better subscription handling
+    const setupAuthListener = () => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('🔔 Auth state changed:', event);
+        
+        if (!mounted) return;
+        
+        try {
+          if (event === 'SIGNED_IN' && session?.user) {
+            await handleUserSession(session.user);
+          } else if (event === 'SIGNED_OUT') {
+            dispatch({ type: AUTH_ACTIONS.SIGN_OUT });
+          }
+        } catch (error) {
+          console.error('❌ Error in auth state change:', error);
         }
-      }
-    });
+      });
+      
+      return subscription;
+    };
 
-    getInitialSession();
+    // Initialize
+    const initialize = async () => {
+      await getInitialSession();
+      if (mounted) {
+        authSubscription = setupAuthListener();
+      }
+    };
+
+    initialize();
 
     return () => {
       mounted = false;
-      subscription?.unsubscribe();
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
     };
   }, []);
 
-  // Auth actions
+  // Auth actions - FIXED: Better error handling and state management
   const authActions = {
     // Sign up user with Supabase
     signUp: async (name, email, password, userLevel = 'Beginner') => {
@@ -342,8 +405,8 @@ export const AuthProvider = ({ children }) => {
           // Create user profile data
           const userData = {
             id: data.user.id,
-            name: name,
-            email: email,
+            name: name || 'User',
+            email: email || '',
             joinDate: data.user.created_at
           };
           
@@ -403,19 +466,8 @@ export const AuthProvider = ({ children }) => {
           console.log('✅ Supabase sign in successful!');
           console.log('👤 User ID:', data.user.id);
           
-          // Get stored user data
-          const storedProfile = await storage.getItem(AUTH_STORAGE_KEYS.USER_PROFILE);
-          const storedLevel = await storage.getItem(AUTH_STORAGE_KEYS.USER_LEVEL);
-          
-          const userData = storedProfile ? JSON.parse(storedProfile) : {
-            id: data.user.id,
-            name: data.user.user_metadata?.name || email.split('@')[0],
-            email: email,
-            joinDate: data.user.created_at
-          };
-          
-          // Update state - auth state change listener will handle this
-          // But we'll return success immediately
+          // Auth state change listener will handle the state update
+          // Just return success
           return { success: true };
           
         } else {
@@ -473,7 +525,10 @@ export const AuthProvider = ({ children }) => {
     // Update user data
     updateUser: async (newUserData, newUserLevel) => {
       try {
-        const updatedUserData = { ...state.userData, ...newUserData };
+        const updatedUserData = { 
+          ...(state.userData || {}), 
+          ...(newUserData || {}) 
+        };
         
         await storage.setItem(AUTH_STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedUserData));
         if (newUserLevel) {
@@ -494,10 +549,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Context value
+  // Context value - FIXED: Ensure all values are properly defined
   const contextValue = {
     // State
-    ...state,
+    isLoading: state.isLoading,
+    isSignedIn: state.isSignedIn,
+    isGuest: state.isGuest,
+    user: state.user,
+    userData: state.userData,
+    userLevel: state.userLevel,
+    isFirstTime: state.isFirstTime,
     
     // Actions
     ...authActions,
