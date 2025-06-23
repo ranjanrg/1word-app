@@ -231,7 +231,7 @@ const SignupScreen = ({ navigation, route }) => {
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your full name (e.g., John Smith)"
+                placeholder="Enter your full name"
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -246,7 +246,7 @@ const SignupScreen = ({ navigation, route }) => {
               </View>
             </View>
             <Text style={styles.helperText}>
-              This name will be used in your personalized learning stories
+              Used in your personalized learning stories
             </Text>
           </View>
 
@@ -279,7 +279,7 @@ const SignupScreen = ({ navigation, route }) => {
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="Create a password (min 6 characters)"
+                placeholder="Create a password"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -351,7 +351,7 @@ const SignupScreen = ({ navigation, route }) => {
         {/* Help Text */}
         <View style={styles.helpContainer}>
           <Text style={styles.helpText}>
-            Your personalized learning profile will be saved, including your {userLevel} level and {learningGoals.length} selected goals. Stories will use your real name for a more engaging experience.
+            Your personalized learning profile will be saved, including your {userLevel} level and {learningGoals.length} selected goals. 
           </Text>
         </View>
 

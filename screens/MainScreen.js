@@ -94,7 +94,6 @@ export default function MainScreen({ navigation }) {
       </LinearGradient>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-
         {/* Enhanced Stats Cards */}
         <Animated.View 
           style={[
