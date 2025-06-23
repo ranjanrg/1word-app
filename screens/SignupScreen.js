@@ -80,12 +80,11 @@ const SignupScreen = ({ navigation, route }) => {
     setIsLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    console.log('🚀 Creating account for:', email);
-    console.log('📊 User Level:', userLevel);
-    console.log('🎯 Learning Goals:', learningGoals);
+    console.log('🚀 Creating account for:', { name, email, userLevel, learningGoals });
 
     try {
-      const result = await signUp(name, email, password, userLevel);
+      // Pass the full name to signUp method
+      const result = await signUp(name, email, password, userLevel, learningGoals);
       
       if (result.success) {
         console.log('✅ Signup successful!');
@@ -95,6 +94,13 @@ const SignupScreen = ({ navigation, route }) => {
           const DataManager = require('../utils/DataManager').default;
           await DataManager.updateUserLevel(userLevel);
           await DataManager.updateLearningGoals(learningGoals);
+          
+          // Ensure the full name is saved
+          if (name && name.trim()) {
+            await DataManager.updateUserFullName(name.trim());
+            console.log('✅ Full name saved:', name.trim());
+          }
+          
           console.log('✅ Assessment and goals data saved');
         } catch (error) {
           console.log('⚠️ Could not save additional data:', error);
@@ -103,7 +109,7 @@ const SignupScreen = ({ navigation, route }) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
           'Welcome to OneWord! 🎉', 
-          `Your account has been created successfully!\n\nLevel: ${userLevel}\nGoals: ${learningGoals.length} selected\n\nYou're all set to start learning!`
+          `Hi ${name.split(' ')[0]}! Your account has been created successfully!\n\nLevel: ${userLevel}\nGoals: ${learningGoals.length} selected\n\nYou're all set to start learning!`
         );
         // Navigation will be handled automatically by AuthContext
       } else {
@@ -225,7 +231,7 @@ const SignupScreen = ({ navigation, route }) => {
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your full name"
+                placeholder="Enter your full name (e.g., John Smith)"
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -239,6 +245,9 @@ const SignupScreen = ({ navigation, route }) => {
                 <Text style={styles.iconText}>👤</Text>
               </View>
             </View>
+            <Text style={styles.helperText}>
+              This name will be used in your personalized learning stories
+            </Text>
           </View>
 
           {/* Email Field */}
@@ -342,7 +351,7 @@ const SignupScreen = ({ navigation, route }) => {
         {/* Help Text */}
         <View style={styles.helpContainer}>
           <Text style={styles.helpText}>
-            Your personalized learning profile will be saved, including your {userLevel} level and {learningGoals.length} selected goals.
+            Your personalized learning profile will be saved, including your {userLevel} level and {learningGoals.length} selected goals. Stories will use your real name for a more engaging experience.
           </Text>
         </View>
 
@@ -472,6 +481,12 @@ const styles = StyleSheet.create({
   },
   iconText: {
     fontSize: 16,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   button: {
     backgroundColor: '#000',

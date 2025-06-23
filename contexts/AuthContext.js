@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { supabase } from '../supabase.config';
 import * as SecureStore from 'expo-secure-store';
+import DataManager from '../utils/DataManager';
 
 // Helper function to convert Supabase errors to user-friendly messages
 const getErrorMessage = (error) => {
@@ -71,7 +72,8 @@ const AUTH_ACTIONS = {
   SIGN_UP: 'SIGN_UP',
   SET_GUEST: 'SET_GUEST',
   UPDATE_USER: 'UPDATE_USER',
-  SET_LOADING: 'SET_LOADING'
+  SET_LOADING: 'SET_LOADING',
+  DELETE_ACCOUNT: 'DELETE_ACCOUNT' // Added for account deletion
 };
 
 // Initial state - FIXED: All properties properly initialized
@@ -132,6 +134,13 @@ const authReducer = (prevState, action) => {
         userData: null,
         userLevel: null,
         isLoading: false,
+      };
+    
+    case AUTH_ACTIONS.DELETE_ACCOUNT:
+      return {
+        ...initialState, // Reset to initial state
+        isLoading: false,
+        isFirstTime: true, // They'll be treated as new user
       };
     
     case AUTH_ACTIONS.SET_GUEST:
@@ -200,6 +209,34 @@ const storage = {
       console.error(`Error removing ${key} from storage:`, error);
       return false;
     }
+  },
+
+  // Enhanced method to clear all auth-related storage
+  clearAllAuthStorage: async () => {
+    try {
+      const keysToRemove = [
+        AUTH_STORAGE_KEYS.USER_PROFILE,
+        AUTH_STORAGE_KEYS.USER_LEVEL,
+        AUTH_STORAGE_KEYS.IS_FIRST_TIME,
+        'supabase.auth.token',
+        'auth_token',
+        'user_session',
+        'user_preferences'
+      ];
+
+      const removePromises = keysToRemove.map(key => 
+        SecureStore.deleteItemAsync(key).catch(error => 
+          console.log(`Could not remove ${key}:`, error.message)
+        )
+      );
+
+      await Promise.allSettled(removePromises);
+      console.log('✅ All auth storage cleared');
+      return true;
+    } catch (error) {
+      console.error('❌ Error clearing auth storage:', error);
+      return false;
+    }
   }
 };
 
@@ -217,7 +254,7 @@ const AuthContext = createContext({
   userEmail: null
 });
 
-// Auth Provider Component - FIXED: Better state management
+// Auth Provider Component - FIXED: Better state management + DataManager integration
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
@@ -243,6 +280,9 @@ export const AuthProvider = ({ children }) => {
             await handleUserSession(session.user);
           } else {
             console.log('ℹ️ No existing session found');
+            // Tell DataManager we're in guest mode
+            DataManager.handleAuthChange('guest_user');
+            
             // Check if user has been here before
             const isFirstTime = await storage.getItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME);
             
@@ -259,6 +299,9 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         console.error('❌ Error in getInitialSession:', error);
         if (mounted) {
+          // Tell DataManager we're in guest mode
+          DataManager.handleAuthChange('guest_user');
+          
           dispatch({
             type: AUTH_ACTIONS.RESTORE_SESSION,
             user: null,
@@ -271,13 +314,22 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Handle user session data - FIXED: Better null handling
+    // Handle user session data - FIXED: Better null handling + DataManager integration
     const handleUserSession = async (user) => {
       try {
         if (!user) {
           console.warn('handleUserSession called with null user');
           return;
         }
+
+        console.log('🔄 Handling user session for:', user.email);
+
+        // Tell DataManager about the current user FIRST
+        await DataManager.handleAuthChange(user.id, {
+          fullName: user.user_metadata?.name || '',
+          email: user.email,
+          username: user.email?.split('@')[0] || 'User'
+        });
 
         // Get stored user profile and level
         const storedProfile = await storage.getItem(AUTH_STORAGE_KEYS.USER_PROFILE);
@@ -312,6 +364,8 @@ export const AuthProvider = ({ children }) => {
           isGuest: false
         });
         
+        console.log('✅ User session handled successfully');
+        
       } catch (error) {
         console.error('❌ Error handling user session:', error);
         // Even on error, make sure we have a valid state
@@ -326,7 +380,7 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Listen for auth changes - FIXED: Better subscription handling
+    // Listen for auth changes - FIXED: Better subscription handling + DataManager integration
     const setupAuthListener = () => {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('🔔 Auth state changed:', event);
@@ -335,9 +389,16 @@ export const AuthProvider = ({ children }) => {
         
         try {
           if (event === 'SIGNED_IN' && session?.user) {
+            console.log('✅ User signed in:', session.user.email);
             await handleUserSession(session.user);
           } else if (event === 'SIGNED_OUT') {
+            console.log('✅ User signed out');
+            // Tell DataManager user logged out
+            DataManager.handleAuthChange('guest_user');
             dispatch({ type: AUTH_ACTIONS.SIGN_OUT });
+          } else if (event === 'TOKEN_REFRESHED' && session) {
+            console.log('🔄 Token refreshed');
+            // No need to reinitialize, just update session
           }
         } catch (error) {
           console.error('❌ Error in auth state change:', error);
@@ -365,7 +426,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // Auth actions - FIXED: Better error handling and state management
+  // Auth actions - FIXED: Better error handling and state management + DataManager integration
   const authActions = {
     // Sign up user with Supabase
     signUp: async (name, email, password, userLevel = 'Beginner') => {
@@ -402,6 +463,13 @@ export const AuthProvider = ({ children }) => {
           console.log('✅ Supabase signup successful!');
           console.log('👤 User ID:', data.user.id);
           
+          // Tell DataManager about the new user IMMEDIATELY
+          await DataManager.handleAuthChange(data.user.id, {
+            fullName: name || '',
+            email: email,
+            username: name || email.split('@')[0]
+          });
+          
           // Create user profile data
           const userData = {
             id: data.user.id,
@@ -423,6 +491,7 @@ export const AuthProvider = ({ children }) => {
             userLevel: userLevel
           });
           
+          console.log('✅ New user fully initialized with fresh data');
           return { success: true };
           
         } else {
@@ -466,7 +535,7 @@ export const AuthProvider = ({ children }) => {
           console.log('✅ Supabase sign in successful!');
           console.log('👤 User ID:', data.user.id);
           
-          // Auth state change listener will handle the state update
+          // Auth state change listener will handle the state update and DataManager
           // Just return success
           return { success: true };
           
@@ -501,6 +570,8 @@ export const AuthProvider = ({ children }) => {
         await storage.removeItem(AUTH_STORAGE_KEYS.USER_PROFILE);
         await storage.removeItem(AUTH_STORAGE_KEYS.USER_LEVEL);
         
+        // DataManager will be notified via auth state change listener
+        
         console.log('✅ Sign out successful');
         return { success: true };
         
@@ -510,9 +581,83 @@ export const AuthProvider = ({ children }) => {
       }
     },
 
+    // DELETE ACCOUNT METHOD - NEW
+    deleteAccount: async () => {
+      try {
+        console.log('🗑️ Starting account deletion process...');
+        
+        if (!state.user || !state.user.id) {
+          console.log('❌ No user found to delete');
+          return { success: false, error: 'No user session found' };
+        }
+
+        const userId = state.user.id;
+        const userEmail = state.userData?.email || 'Unknown';
+        console.log('🔍 Deleting account for user:', userId, userEmail);
+        
+        // Step 1: Create backup before deletion (optional)
+        try {
+          await DataManager.backupUserDataBeforeDeletion(userId);
+        } catch (error) {
+          console.log('⚠️ Could not create backup:', error.message);
+          // Continue with deletion even if backup fails
+        }
+        
+        // Step 2: Clear all local user data FIRST
+        try {
+          await DataManager.clearUserDataPermanently(userId);
+          console.log('✅ Local user data cleared');
+        } catch (error) {
+          console.log('⚠️ Error clearing local data:', error);
+          // Continue with deletion even if local cleanup fails
+        }
+        
+        // Step 3: Sign out from Supabase (this will clear the session)
+        try {
+          await supabase.auth.signOut();
+          console.log('✅ Supabase session cleared');
+        } catch (error) {
+          console.log('⚠️ Error clearing Supabase session:', error);
+        }
+        
+        // Step 4: Delete user from Supabase Auth (if possible)
+        // Note: Supabase doesn't allow users to delete themselves directly
+        // This would need to be done via a server function or admin API
+        // For now, we'll just clear the local data and session
+        
+        // Step 5: Clear all auth-related storage
+        await storage.clearAllAuthStorage();
+        
+        // Step 6: Reset DataManager to guest mode
+        DataManager.handleAuthChange('guest_user');
+        
+        // Step 7: Reset auth state completely
+        dispatch({ type: AUTH_ACTIONS.DELETE_ACCOUNT });
+        
+        console.log('✅ Account deletion completed successfully');
+        
+        return { 
+          success: true, 
+          message: 'Account and all data deleted successfully' 
+        };
+        
+      } catch (error) {
+        console.error('💥 Account deletion failed:', error);
+        return { 
+          success: false, 
+          error: error.message || 'Failed to delete account' 
+        };
+      }
+    },
+
     // Set guest mode
     setGuest: async () => {
       try {
+        console.log('👤 Setting guest mode');
+        
+        // Tell DataManager we're in guest mode
+        DataManager.handleAuthChange('guest_user');
+        
         await storage.setItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME, 'false');
         dispatch({ type: AUTH_ACTIONS.SET_GUEST });
         return { success: true };

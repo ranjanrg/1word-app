@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import DataManager from '../utils/DataManager';
-import ClaudeService from '../utils/ClaudeService'; // Import Claude service
+import ClaudeService from '../utils/ClaudeService'; // ✅ ONLY THIS IMPORT
 
 const { width } = Dimensions.get('window');
 
@@ -45,7 +45,7 @@ export default function LearnWordScreen({ navigation }) {
       startStepAnimation();
       // Initialize spelling letters when wordData is available
       if (currentStep === 3) {
-        setAvailableLetters([...wordData.steps[3].letters]);
+        setAvailableLetters([...wordData.spellingLetters]);
       }
     }
   }, [currentStep, wordData]);
@@ -70,8 +70,14 @@ export default function LearnWordScreen({ navigation }) {
       const transformedData = transformLessonData(lesson);
       setWordData(transformedData);
       
-      // Initialize spelling letters
-      setAvailableLetters([...lesson.steps[3].letters]);
+      // Initialize spelling letters safely
+      if (transformedData.spellingLetters && Array.isArray(transformedData.spellingLetters)) {
+        setAvailableLetters([...transformedData.spellingLetters]);
+      } else {
+        // Fallback if spelling letters are missing
+        const fallbackLetters = transformedData.targetWord.split('').sort(() => Math.random() - 0.5);
+        setAvailableLetters(fallbackLetters);
+      }
       
     } catch (error) {
       console.error('❌ Error loading word lesson:', error);
@@ -97,120 +103,110 @@ export default function LearnWordScreen({ navigation }) {
     }
   };
 
-  // Transform Claude lesson data to component format
-// Replace your transformLessonData function in LearnWordScreen.js with this:
+  // Enhanced transformLessonData with better error handling
+  const transformLessonData = (lesson) => {
+    console.log('🔄 Transforming lesson data:', lesson);
+    
+    // Ensure lesson exists and has required properties
+    if (!lesson || !lesson.targetWord) {
+      console.error('❌ Invalid lesson structure');
+      return getFallbackTransformedData();
+    }
 
-const transformLessonData = (lesson) => {
-  console.log('🔄 Transforming lesson data:', lesson);
-  
-  // Ensure lesson and steps exist
-  if (!lesson || !lesson.steps) {
-    console.error('❌ Invalid lesson structure');
-    // Return a safe fallback structure
+    try {
+      // Safely access nested properties with fallbacks
+      const steps = lesson.steps || {};
+      const step1 = steps[1] || steps['1'] || {};
+      const step2 = steps[2] || steps['2'] || {};
+      const step3 = steps[3] || steps['3'] || {};
+      const step4 = steps[4] || steps['4'] || {};
+
+      const transformed = {
+        targetWord: lesson.targetWord.toUpperCase(),
+        emoji: lesson.emoji || '📚',
+        story: lesson.story || step1.story || 'This is a story about learning new words.',
+        
+        // Story options (Step 1) - Safe access with fallbacks
+        storyOptions: (step1.options || [lesson.targetWord, 'option1', 'option2', 'option3']).map((option, index) => ({
+          id: String.fromCharCode(65 + index), // A, B, C, D
+          text: option || `option${index + 1}`,
+          correct: option === (step1.correctAnswer || lesson.targetWord)
+        })),
+        
+        // Meaning options (Step 2) - Safe access with fallbacks
+        meaningOptions: (() => {
+          const correctAnswer = step2.correctAnswer || lesson.definition || 'A word to learn';
+          const wrongAnswers = lesson.wrongAnswers || ['Wrong answer 1', 'Wrong answer 2', 'Wrong answer 3'];
+          const allOptions = step2.options || [correctAnswer, ...wrongAnswers];
+          
+          return allOptions.slice(0, 4).map((option, index) => ({
+            id: String.fromCharCode(65 + index),
+            text: option || `option${index + 1}`,
+            correct: option === correctAnswer
+          }));
+        })(),
+        
+        // Spelling letters (Step 3) - Safe access with fallbacks
+        spellingLetters: (() => {
+          if (step3.letters && Array.isArray(step3.letters)) {
+            return step3.letters;
+          }
+          // Generate letters from target word as fallback
+          return lesson.targetWord.toUpperCase().split('').sort(() => Math.random() - 0.5);
+        })(),
+        
+        // Usage options (Step 4) - Safe access with fallbacks
+        usageOptions: (() => {
+          const correctUsage = step4.correctAnswer || (lesson.usageOptions && lesson.usageOptions[0]) || `This is how you use ${lesson.targetWord.toLowerCase()} correctly.`;
+          const wrongUsages = lesson.usageOptions ? lesson.usageOptions.slice(1) : ['Wrong usage 1', 'Wrong usage 2', 'Wrong usage 3'];
+          const allOptions = step4.options || [correctUsage, ...wrongUsages];
+          
+          return allOptions.slice(0, 4).map((option, index) => ({
+            id: String.fromCharCode(65 + index),
+            text: option || `usage${index + 1}`,
+            correct: option === correctUsage
+          }));
+        })(),
+        
+        definition: lesson.definition || 'A vocabulary word'
+      };
+
+      console.log('✅ Transformed lesson data:', transformed);
+      return transformed;
+    } catch (error) {
+      console.error('❌ Error transforming lesson data:', error);
+      return getFallbackTransformedData();
+    }
+  };
+
+  // Add this helper function for fallback data
+  const getFallbackTransformedData = () => {
     return {
-      targetWord: 'SERENDIPITY',
-      emoji: '✨',
-      story: 'Maya was looking for a coffee shop when she stumbled upon a tiny bookstore. Inside, she found the exact rare novel she had been searching for months. This unexpected discovery filled her with joy.',
+      targetWord: 'JOURNEY',
+      emoji: '🚗',
+      story: 'Yesterday, I packed snacks for a long drive. We sang songs and played games in the car during our adventure.',
       storyOptions: [
-        { id: 'A', text: 'serendipity', correct: true },
-        { id: 'B', text: 'melancholy', correct: false },
-        { id: 'C', text: 'perseverance', correct: false },
-        { id: 'D', text: 'hypothesis', correct: false }
+        { id: 'A', text: 'journey', correct: true },
+        { id: 'B', text: 'story', correct: false },
+        { id: 'C', text: 'adventure', correct: false },
+        { id: 'D', text: 'travel', correct: false }
       ],
       meaningOptions: [
-        { id: 'A', text: 'A pleasant surprise or discovery', correct: true },
-        { id: 'B', text: 'A feeling of deep sadness', correct: false },
-        { id: 'C', text: 'A planned achievement', correct: false },
-        { id: 'D', text: 'A difficult challenge', correct: false }
+        { id: 'A', text: 'Travel from one place to another', correct: true },
+        { id: 'B', text: 'A place to sleep', correct: false },
+        { id: 'C', text: 'Something to eat', correct: false },
+        { id: 'D', text: 'A type of music', correct: false }
       ],
-      spellingLetters: ['S', 'E', 'R', 'E', 'N', 'D', 'I', 'P', 'I', 'T', 'Y'].sort(() => Math.random() - 0.5),
+      spellingLetters: ['J', 'O', 'U', 'R', 'N', 'E', 'Y'].sort(() => Math.random() - 0.5),
       usageOptions: [
-        { id: 'A', text: 'Finding my soulmate at a random coffee shop was pure serendipity', correct: true },
-        { id: 'B', text: 'I serendipity my homework every night', correct: false },
-        { id: 'C', text: 'The serendipity weather ruined our picnic', correct: false },
-        { id: 'D', text: 'She serendipity walked to the store yesterday', correct: false }
+        { id: 'A', text: 'We went on a journey to the mountains.', correct: true },
+        { id: 'B', text: 'Let\'s have a picnic in a park.', correct: false },
+        { id: 'C', text: 'We enjoyed shopping at a mall.', correct: false },
+        { id: 'D', text: 'We watched a movie at home.', correct: false }
       ],
-      definition: 'A pleasant surprise or discovery'
+      definition: 'Travel from one place to another'
     };
-  }
-
-  try {
-    const transformed = {
-      targetWord: lesson.targetWord?.toUpperCase() || 'SERENDIPITY',
-      emoji: lesson.emoji || '📚',
-      story: lesson.story || 'This is a story about learning new words.',
-      
-      // Story options (Step 1) - Safe access with fallbacks
-      storyOptions: (lesson.steps[1]?.options || ['serendipity', 'melancholy', 'perseverance', 'hypothesis']).map((option, index) => ({
-        id: String.fromCharCode(65 + index), // A, B, C, D
-        text: option,
-        correct: option === (lesson.steps[1]?.correctAnswer || 'serendipity')
-      })),
-      
-      // Meaning options (Step 2) - Safe access with fallbacks
-      meaningOptions: (lesson.steps[2]?.options || [
-        'A pleasant surprise or discovery',
-        'A feeling of deep sadness',
-        'A planned achievement',
-        'A difficult challenge'
-      ]).map((option, index) => ({
-        id: String.fromCharCode(65 + index),
-        text: option,
-        correct: option === (lesson.steps[2]?.correctAnswer || 'A pleasant surprise or discovery')
-      })),
-      
-      // Spelling letters (Step 3) - Safe access with fallback
-      spellingLetters: lesson.steps[3]?.letters || 
-        (lesson.targetWord?.toUpperCase().split('').sort(() => Math.random() - 0.5)) ||
-        ['S', 'E', 'R', 'E', 'N', 'D', 'I', 'P', 'I', 'T', 'Y'].sort(() => Math.random() - 0.5),
-      
-      // Usage options (Step 4) - Safe access with fallbacks
-      usageOptions: (lesson.steps[4]?.options || [
-        'Finding my soulmate at a random coffee shop was pure serendipity',
-        'I serendipity my homework every night',
-        'The serendipity weather ruined our picnic',
-        'She serendipity walked to the store yesterday'
-      ]).map((option, index) => ({
-        id: String.fromCharCode(65 + index),
-        text: option,
-        correct: option === (lesson.steps[4]?.correctAnswer || lesson.steps[4]?.options?.[0])
-      })),
-      
-      definition: lesson.definition || 'A pleasant surprise or discovery'
-    };
-
-    console.log('✅ Transformed lesson data:', transformed);
-    return transformed;
-  } catch (error) {
-    console.error('❌ Error transforming lesson data:', error);
-    // Return safe fallback if transformation fails
-    return {
-      targetWord: 'SERENDIPITY',
-      emoji: '✨',
-      story: 'Maya was looking for a coffee shop when she stumbled upon a tiny bookstore. Inside, she found the exact rare novel she had been searching for months. This unexpected discovery filled her with joy.',
-      storyOptions: [
-        { id: 'A', text: 'serendipity', correct: true },
-        { id: 'B', text: 'melancholy', correct: false },
-        { id: 'C', text: 'perseverance', correct: false },
-        { id: 'D', text: 'hypothesis', correct: false }
-      ],
-      meaningOptions: [
-        { id: 'A', text: 'A pleasant surprise or discovery', correct: true },
-        { id: 'B', text: 'A feeling of deep sadness', correct: false },
-        { id: 'C', text: 'A planned achievement', correct: false },
-        { id: 'D', text: 'A difficult challenge', correct: false }
-      ],
-      spellingLetters: ['S', 'E', 'R', 'E', 'N', 'D', 'I', 'P', 'I', 'T', 'Y'].sort(() => Math.random() - 0.5),
-      usageOptions: [
-        { id: 'A', text: 'Finding my soulmate at a random coffee shop was pure serendipity', correct: true },
-        { id: 'B', text: 'I serendipity my homework every night', correct: false },
-        { id: 'C', text: 'The serendipity weather ruined our picnic', correct: false },
-        { id: 'D', text: 'She serendipity walked to the store yesterday', correct: false }
-      ],
-      definition: 'A pleasant surprise or discovery'
-    };
-  }
-};
+  };
 
   // Fallback to offline lesson if API fails
   const loadFallbackLesson = () => {
@@ -218,7 +214,11 @@ const transformLessonData = (lesson) => {
     const fallback = ClaudeService.getFallbackLesson();
     const transformedData = transformLessonData(fallback);
     setWordData(transformedData);
-    setAvailableLetters([...fallback.steps[3].letters]);
+    
+    // Initialize spelling letters safely
+    if (transformedData.spellingLetters && Array.isArray(transformedData.spellingLetters)) {
+      setAvailableLetters([...transformedData.spellingLetters]);
+    }
     setLoadingError(null);
   };
 
@@ -341,10 +341,10 @@ const transformLessonData = (lesson) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         
         // Navigate back with success notification
-        navigation.navigate('Main', { wordLearned: true });
+        navigation.navigate('MainScreen', { wordLearned: true });
       } catch (error) {
         console.error('Error saving progress:', error);
-        navigation.navigate('Main');
+        navigation.navigate('MainScreen');
       }
     }
   };
@@ -390,7 +390,7 @@ const transformLessonData = (lesson) => {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#000" />
           <Text style={styles.loadingText}>Generating your personalized word...</Text>
-          <Text style={styles.loadingSubtext}>✨ Powered by Claude AI</Text>
+          <Text style={styles.loadingSubtext}>✨ Powered by OpenAI</Text>
         </View>
       </View>
     );
@@ -431,7 +431,7 @@ const transformLessonData = (lesson) => {
     );
   }
 
-  // Render main learning interface (rest of your existing render methods stay the same)
+  // Render main learning interface
   const renderStoryStep = () => (
     <Animated.ScrollView 
       style={styles.stepContainer}
@@ -707,6 +707,11 @@ const transformLessonData = (lesson) => {
             <TouchableOpacity style={styles.tryAgainButton} onPress={() => {
               setShowResult(false);
               setSelectedAnswer('');
+              if (currentStep === 3) {
+                // Reset spelling on wrong answer
+                setSpellingAnswer([]);
+                setAvailableLetters(wordData.spellingLetters);
+              }
             }}>
               <Text style={styles.tryAgainButtonText}>Try Again</Text>
             </TouchableOpacity>
@@ -914,7 +919,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  // ... (rest of your existing styles remain the same)
+  // Story and content styles
   storyCard: {
     backgroundColor: '#fff',
     borderRadius: 20,

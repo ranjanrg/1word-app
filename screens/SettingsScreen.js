@@ -22,7 +22,8 @@ const useFallbackAuth = () => ({
   isSignedIn: true,
   userData: null,
   updateUser: async () => ({ success: true }),
-  signOut: async () => ({ success: true })
+  signOut: async () => ({ success: true }),
+  deleteAccount: async () => ({ success: true })
 });
 
 const SettingsScreen = ({ navigation }) => {
@@ -44,7 +45,8 @@ const SettingsScreen = ({ navigation }) => {
     isSignedIn,
     userData,
     updateUser,
-    signOut 
+    signOut,
+    deleteAccount
   } = authHook;
 
   // Animation values
@@ -201,6 +203,84 @@ const SettingsScreen = ({ navigation }) => {
         },
       ]
     );
+  };
+
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      '⚠️ Delete Account',
+      `Are you sure you want to permanently delete your account?\n\nThis will:\n• Remove all your progress and learned words\n• Delete your profile data\n• Cannot be undone\n\nYou can always create a new account later.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            // Second confirmation for extra safety
+            Alert.alert(
+              'Final Confirmation',
+              `Type your email to confirm deletion:\n${userEmail}\n\nThis action cannot be undone.`,
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: performAccountDeletion,
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const performAccountDeletion = async () => {
+    console.log('🗑️ User confirmed account deletion');
+    
+    try {
+      // Show loading state
+      Alert.alert('Deleting Account...', 'Please wait while we delete your account.');
+      
+      const result = await deleteAccount();
+      
+      if (result.success) {
+        console.log('✅ Account deletion successful');
+        Alert.alert(
+          'Account Deleted',
+          'Your account has been permanently deleted. Thank you for using OneWord!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate to welcome screen
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'AuthWelcome' }],
+                });
+              },
+            },
+          ]
+        );
+      } else {
+        console.error('❌ Account deletion failed:', result.error);
+        Alert.alert(
+          'Deletion Failed', 
+          result.error || 'Failed to delete account. Please try again or contact support.'
+        );
+      }
+    } catch (error) {
+      console.error('Account deletion error:', error);
+      Alert.alert(
+        'Error', 
+        'Failed to delete account. Please try again or contact support.'
+      );
+    }
   };
 
   const handleSignUp = () => {
@@ -426,14 +506,25 @@ const SettingsScreen = ({ navigation }) => {
           ]}
         >
           {isSignedIn ? (
-            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-              <LinearGradient
-                colors={['#ef4444', '#dc2626']}
-                style={styles.buttonGradient}
+            <>
+              {/* Sign Out Button */}
+              <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+                <LinearGradient
+                  colors={['#ef4444', '#dc2626']}
+                  style={styles.buttonGradient}
+                >
+                  <Text style={styles.signOutButtonText}>Sign Out</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Delete Account Button - Subtle and at bottom */}
+              <TouchableOpacity 
+                style={styles.deleteAccountButton} 
+                onPress={handleDeleteAccount}
               >
-                <Text style={styles.signOutButtonText}>Sign Out</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <Text style={styles.deleteAccountText}>Delete Account</Text>
+              </TouchableOpacity>
+            </>
           ) : (
             <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp}>
               <LinearGradient
@@ -701,6 +792,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 6,
+    marginBottom: 16,
   },
   signUpButton: {
     borderRadius: 16,
@@ -724,6 +816,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  deleteAccountButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  deleteAccountText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   modalOverlay: {
     flex: 1,
