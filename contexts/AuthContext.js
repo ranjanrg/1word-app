@@ -72,8 +72,7 @@ const AUTH_ACTIONS = {
   SIGN_UP: 'SIGN_UP',
   SET_GUEST: 'SET_GUEST',
   UPDATE_USER: 'UPDATE_USER',
-  SET_LOADING: 'SET_LOADING',
-  DELETE_ACCOUNT: 'DELETE_ACCOUNT' // Added for account deletion
+  SET_LOADING: 'SET_LOADING'
 };
 
 // Initial state - FIXED: All properties properly initialized
@@ -134,13 +133,6 @@ const authReducer = (prevState, action) => {
         userData: null,
         userLevel: null,
         isLoading: false,
-      };
-    
-    case AUTH_ACTIONS.DELETE_ACCOUNT:
-      return {
-        ...initialState, // Reset to initial state
-        isLoading: false,
-        isFirstTime: true, // They'll be treated as new user
       };
     
     case AUTH_ACTIONS.SET_GUEST:
@@ -578,75 +570,6 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         console.error('❌ Sign out exception:', error);
         return { success: false, error: error.message };
-      }
-    },
-
-    // DELETE ACCOUNT METHOD - NEW
-    deleteAccount: async () => {
-      try {
-        console.log('🗑️ Starting account deletion process...');
-        
-        if (!state.user || !state.user.id) {
-          console.log('❌ No user found to delete');
-          return { success: false, error: 'No user session found' };
-        }
-
-        const userId = state.user.id;
-        const userEmail = state.userData?.email || 'Unknown';
-        console.log('🔍 Deleting account for user:', userId, userEmail);
-        
-        // Step 1: Create backup before deletion (optional)
-        try {
-          await DataManager.backupUserDataBeforeDeletion(userId);
-        } catch (error) {
-          console.log('⚠️ Could not create backup:', error.message);
-          // Continue with deletion even if backup fails
-        }
-        
-        // Step 2: Clear all local user data FIRST
-        try {
-          await DataManager.clearUserDataPermanently(userId);
-          console.log('✅ Local user data cleared');
-        } catch (error) {
-          console.log('⚠️ Error clearing local data:', error);
-          // Continue with deletion even if local cleanup fails
-        }
-        
-        // Step 3: Sign out from Supabase (this will clear the session)
-        try {
-          await supabase.auth.signOut();
-          console.log('✅ Supabase session cleared');
-        } catch (error) {
-          console.log('⚠️ Error clearing Supabase session:', error);
-        }
-        
-        // Step 4: Delete user from Supabase Auth (if possible)
-        // Note: Supabase doesn't allow users to delete themselves directly
-        // This would need to be done via a server function or admin API
-        // For now, we'll just clear the local data and session
-        
-        // Step 5: Clear all auth-related storage
-        await storage.clearAllAuthStorage();
-        
-        // Step 6: Reset DataManager to guest mode
-        DataManager.handleAuthChange('guest_user');
-        
-        // Step 7: Reset auth state completely
-        dispatch({ type: AUTH_ACTIONS.DELETE_ACCOUNT });
-        
-        console.log('✅ Account deletion completed successfully');
-        
-        return { 
-          success: true, 
-          message: 'Account and all data deleted successfully' 
-        };
-        
-      } catch (error) {
-        console.error('💥 Account deletion failed:', error);
-        return { 
-          success: false, 
-          error: error.message || 'Failed to delete account' 
-        };
       }
     },
 
