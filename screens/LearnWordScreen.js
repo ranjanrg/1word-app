@@ -50,6 +50,8 @@ export default function LearnWordScreen({ navigation }) {
     }
   }, [currentStep, wordData]);
 
+  
+
   const loadWordLesson = async () => {
     try {
       setIsLoading(true);

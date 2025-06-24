@@ -169,6 +169,8 @@ class DataManager {
     }
   }
 
+  
+
   // Get learned words history with user isolation
   static async getLearnedWords() {
     try {
@@ -186,10 +188,72 @@ class DataManager {
     }
   }
 
+  // Check if user can learn a word today (daily limit)
+  static async canLearnWordToday() {
+    try {
+      const userId = currentUserId;
+      const today = new Date().toDateString();
+      
+      // Get today's learned words
+      const learnedWords = await this.getLearnedWords();
+      const todayWords = learnedWords.filter(word => {
+        const wordDate = new Date(word.timestamp).toDateString();
+        return wordDate === today;
+      });
+      
+      console.log('📅 Words learned today:', todayWords.length);
+      
+      // Free users can learn 1 word per day
+      const dailyLimit = 1;
+      const canLearn = todayWords.length < dailyLimit;
+      
+      return {
+        canLearn,
+        wordsToday: todayWords.length,
+        dailyLimit,
+        nextWordAvailable: canLearn ? null : this.getNextDayTime()
+      };
+    } catch (error) {
+      console.error('❌ Error checking daily limit:', error);
+      return { canLearn: true, wordsToday: 0, dailyLimit: 1 }; // Default to allowing if error
+    }
+  }
+
+  // Get time when next word will be available (tomorrow)
+  static getNextDayTime() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0); // Start of tomorrow
+    return tomorrow;
+  }
+
+  // Get remaining time until next word
+  static getTimeUntilNextWord() {
+    const now = new Date();
+    const tomorrow = this.getNextDayTime();
+    const diff = tomorrow.getTime() - now.getTime();
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return { hours, minutes };
+  }
+
   // Add a new learned word with user isolation
   static async addLearnedWord(word, meaning, emoji = '📖') {
     try {
       const userId = currentUserId;
+
+      // Check daily limit first
+      const limitCheck = await this.canLearnWordToday();
+      if (!limitCheck.canLearn) {
+        console.log('❌ Daily word limit reached');
+        return { 
+          success: false, 
+          error: 'daily_limit_reached',
+          timeUntilNext: this.getTimeUntilNextWord()
+        };
+      }
 
       const existingWords = await this.getLearnedWords();
       
@@ -197,7 +261,7 @@ class DataManager {
       const wordExists = existingWords.some(w => w.word.toLowerCase() === word.toLowerCase());
       if (wordExists) {
         console.log('⚠️ Word already learned by this user:', word);
-        return true; // Don't add duplicate, but return success
+        return { success: true, alreadyLearned: true }; // Don't add duplicate, but return success
       }
 
       const newWord = {
@@ -219,10 +283,10 @@ class DataManager {
       await SecureStore.setItemAsync(wordsKey, JSON.stringify(updatedWords));
       
       console.log('✅ Word added for user:', { userId, word, totalWords: updatedWords.length });
-      return true;
+      return { success: true, wordCount: updatedWords.length };
     } catch (error) {
       console.error('❌ Error adding learned word:', error);
-      return false;
+      return { success: false, error: 'storage_error' };
     }
   }
 

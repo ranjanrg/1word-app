@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Animated, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import DataManager from '../utils/DataManager';
@@ -11,12 +11,26 @@ export default function MainScreen({ navigation }) {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [recentWords, setRecentWords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dailyStatus, setDailyStatus] = useState({ canLearn: true, wordsToday: 0 });
 
   // Animation values
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
 
-  const handleLearnToday = () => {
+  const handleLearnToday = async () => {
+    // Check daily limit before navigating
+    const limitStatus = await DataManager.canLearnWordToday();
+    
+    if (!limitStatus.canLearn) {
+      const timeUntil = DataManager.getTimeUntilNextWord();
+      Alert.alert(
+        "🎯 Daily Goal Complete!",
+        `You've already learned your word for today!\n\nNext word available in ${timeUntil.hours}h ${timeUntil.minutes}m`,
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    
     navigation.navigate('LearnWord');
   };
 
@@ -28,10 +42,12 @@ export default function MainScreen({ navigation }) {
     try {
       const progress = await DataManager.getUserProgress();
       const learnedWordsHistory = await DataManager.getLearnedWords();
+      const limitStatus = await DataManager.canLearnWordToday();
       
       setWordsLearned(progress.wordsLearned);
       setCurrentStreak(progress.currentStreak);
       setRecentWords(learnedWordsHistory);
+      setDailyStatus(limitStatus);
       
       setLoading(false);
 
@@ -144,14 +160,21 @@ export default function MainScreen({ navigation }) {
                     <Text style={styles.heroEmoji}>✨</Text>
                   </View>
                   <View style={styles.heroTextContainer}>
-                    <Text style={styles.heroTitle}>Learn Today's Word</Text>
+                    <Text style={styles.heroTitle}>
+                      {dailyStatus.canLearn ? "Learn Today's Word" : "Daily Goal Complete!"}
+                    </Text>
                     <Text style={styles.heroSubtitle}>
-                      {currentStreak > 0 ? `Continue your ${currentStreak}-day streak!` : 'Start your learning journey!'}
+                      {dailyStatus.canLearn 
+                        ? (currentStreak > 0 ? `Continue your ${currentStreak}-day streak!` : 'Start your learning journey!')
+                        : 'Come back tomorrow for your next word'
+                      }
                     </Text>
                   </View>
                 </View>
                 <View style={styles.heroArrow}>
-                  <Text style={styles.arrowText}>→</Text>
+                  <Text style={styles.arrowText}>
+                    {dailyStatus.canLearn ? "→" : "✓"}
+                  </Text>
                 </View>
               </View>
               

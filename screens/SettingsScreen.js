@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+import NotificationManager from '../utils/NotificationManager';
 
 // Fallback auth hook if context not available
 const useFallbackAuth = () => ({
@@ -52,7 +53,7 @@ const SettingsScreen = ({ navigation }) => {
   const [slideAnim] = useState(new Animated.Value(30));
 
   // State for settings
-  const [reminderTime, setReminderTime] = useState(new Date());
+  const [reminderTime, setReminderTime] = useState('09:00');
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showDifficultyModal, setShowDifficultyModal] = useState(false);
   const [currentDifficulty, setCurrentDifficulty] = useState(userLevel || 'Beginner');
@@ -113,11 +114,10 @@ const SettingsScreen = ({ navigation }) => {
 
   const initializeSettings = async () => {
     // Set default reminder time to 9:00 AM
-    const defaultTime = new Date();
-    defaultTime.setHours(9, 0, 0, 0);
-    setReminderTime(defaultTime);
+    setReminderTime('09:00');
     
-    // Skip notification setup for now to avoid errors
+    // Request notification permissions
+    await NotificationManager.requestPermissions();
     console.log('Settings initialized');
   };
 
@@ -144,14 +144,6 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  const formatTime = (time) => {
-    return time.toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
-
   // Format join date if available
   const formatJoinDate = (dateString) => {
     if (!dateString) return 'Recently joined';
@@ -165,6 +157,51 @@ const SettingsScreen = ({ navigation }) => {
       });
     } catch (error) {
       return 'Recently joined';
+    }
+  };
+
+  const handleTimeSelect = async (hour, minute) => {
+    const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    setReminderTime(timeString);
+    setShowTimePicker(false);
+    
+    // Check if this is a test notification (1 minute from now)
+    const currentTime = new Date();
+    const isTestNotification = Math.abs((hour * 60 + minute) - (currentTime.getHours() * 60 + currentTime.getMinutes())) <= 2;
+    
+    if (isTestNotification) {
+      // Schedule immediate test notification
+      try {
+        await NotificationManager.scheduleTestNotification();
+        Alert.alert(
+          '🧪 Test Notification Scheduled',
+          'A test notification will appear in about 1 minute. Make sure to minimize the app to see it!',
+          [{ text: 'OK' }]
+        );
+      } catch (error) {
+        Alert.alert(
+          '❌ Test Failed',
+          'Could not schedule test notification. Please check notification permissions.',
+          [{ text: 'OK' }]
+        );
+      }
+    } else {
+      // Schedule the daily reminder
+      const success = await NotificationManager.scheduleDailyReminder(hour, minute);
+      
+      if (success) {
+        Alert.alert(
+          '✅ Reminder Set',
+          `Daily learning reminder set for ${timeString}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          '❌ Permission Required',
+          'Please enable notifications in your device settings to receive learning reminders.',
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
 
@@ -317,13 +354,7 @@ const SettingsScreen = ({ navigation }) => {
           <View style={styles.settingsCard}>
             <TouchableOpacity 
               style={styles.settingItem} 
-              onPress={() => {
-                Alert.alert(
-                  'Daily Reminder ⏰',
-                  'Notification features will be available in the next update!',
-                  [{ text: 'OK' }]
-                );
-              }}
+              onPress={() => setShowTimePicker(true)}
             >
               <View style={styles.settingLeft}>
                 <View style={styles.settingIcon}>
@@ -331,7 +362,7 @@ const SettingsScreen = ({ navigation }) => {
                 </View>
                 <View style={styles.settingContent}>
                   <Text style={styles.settingTitle}>Daily Reminder</Text>
-                  <Text style={styles.settingSubtitle}>{formatTime(reminderTime)}</Text>
+                  <Text style={styles.settingSubtitle}>{reminderTime}</Text>
                 </View>
               </View>
               <Text style={styles.settingArrow}>→</Text>
@@ -449,6 +480,54 @@ const SettingsScreen = ({ navigation }) => {
 
         <View style={{ height: 50 }} />
       </ScrollView>
+
+      {/* Time Picker Modal */}
+      <Modal
+        visible={showTimePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowTimePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.timePickerContainer}>
+            <Text style={styles.timePickerTitle}>Set Daily Reminder</Text>
+            
+            <View style={styles.timeOptions}>
+              {[
+                { label: '8:00 AM', hour: 8, minute: 0 },
+                { label: '12:00 PM', hour: 12, minute: 0 },
+                { label: '6:00 PM', hour: 18, minute: 0 },
+                { label: '7:00 PM', hour: 19, minute: 0 },
+                { label: '8:00 PM', hour: 20, minute: 0 },
+                { label: '9:00 PM', hour: 21, minute: 0 },
+              ].map((time, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.timeOption,
+                    reminderTime === `${time.hour.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')}` && styles.selectedTimeOption
+                  ]}
+                  onPress={() => handleTimeSelect(time.hour, time.minute)}
+                >
+                  <Text style={[
+                    styles.timeOptionText,
+                    reminderTime === `${time.hour.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')}` && styles.selectedTimeOptionText
+                  ]}>
+                    {time.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={() => setShowTimePicker(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Enhanced Difficulty Level Modal */}
       <Modal
@@ -727,18 +806,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  deleteAccountText: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontWeight: '500',
-    textDecorationLine: 'underline',
-  },
+  // Time Picker Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  timePickerContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    margin: 20,
+    width: '85%',
+    maxWidth: 300,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  timePickerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  timeOptions: {
+    marginBottom: 20,
+  },
+  timeOption: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  selectedTimeOption: {
+    backgroundColor: '#000',
+  },
+  timeOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  selectedTimeOptionText: {
+    color: '#fff',
+  },
+  cancelButton: {
+    backgroundColor: '#f3f4f6',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  // Difficulty Modal Styles
   difficultyContainer: {
     backgroundColor: '#fff',
     borderRadius: 24,
