@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Animated, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Animated, Alert, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import DataManager from '../utils/DataManager';
+import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
@@ -12,6 +14,33 @@ export default function MainScreen({ navigation }) {
   const [recentWords, setRecentWords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dailyStatus, setDailyStatus] = useState({ canLearn: true, wordsToday: 0 });
+  const [showDailyCompleteModal, setShowDailyCompleteModal] = useState(false);
+  const [timeUntilNext, setTimeUntilNext] = useState({ hours: 0, minutes: 0, seconds: 0 });
+
+  // Update timer every second when modal is visible
+  useEffect(() => {
+    let interval = null;
+    
+    if (showDailyCompleteModal) {
+      // Update immediately
+      const updateTimer = () => {
+        const timeUntil = DataManager.getTimeUntilNextWord();
+        setTimeUntilNext(timeUntil);
+      };
+      
+      updateTimer(); // Initial update
+      
+      // Set interval to update every second
+      interval = setInterval(updateTimer, 1000);
+    }
+    
+    // Cleanup interval when modal closes
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [showDailyCompleteModal]);
 
   // Animation values
   const [fadeAnim] = useState(new Animated.Value(0));
@@ -22,12 +51,9 @@ export default function MainScreen({ navigation }) {
     const limitStatus = await DataManager.canLearnWordToday();
     
     if (!limitStatus.canLearn) {
-      const timeUntil = DataManager.getTimeUntilNextWord();
-      Alert.alert(
-        "🎯 Daily Goal Complete!",
-        `You've already learned your word for today!\n\nNext word available in ${timeUntil.hours}h ${timeUntil.minutes}m`,
-        [{ text: "OK" }]
-      );
+      // Don't set timeUntilNext here anymore - let the useEffect handle it
+      setShowDailyCompleteModal(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
     
@@ -73,6 +99,19 @@ export default function MainScreen({ navigation }) {
   useEffect(() => {
     loadUserData();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('🔄 MainScreen focused - refreshing data...');
+      loadUserData();
+    }, [])
+  );
+  
+  const refreshData = async () => {
+    console.log('🔄 Manually refreshing data...');
+    setLoading(true);
+    await loadUserData();
+  };
 
   if (loading) {
     return (
@@ -263,6 +302,101 @@ export default function MainScreen({ navigation }) {
           <Text style={styles.navLabel}>Settings</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Custom Daily Goal Complete Modal */}
+      <Modal
+        transparent={true}
+        visible={showDailyCompleteModal}
+        animationType="fade"
+        onRequestClose={() => setShowDailyCompleteModal(false)}
+      >
+        <View style={dailyCompleteModalStyles.overlay}>
+          <Animated.View 
+            style={[
+              dailyCompleteModalStyles.container,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: slideAnim.interpolate({ inputRange: [0, 50], outputRange: [1, 0.8] }) }],
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={['#000', '#2d3436']}
+              style={dailyCompleteModalStyles.gradient}
+            >
+              {/* Success Icon */}
+              <View style={dailyCompleteModalStyles.iconContainer}>
+                <Text style={dailyCompleteModalStyles.successIcon}>🎯</Text>
+              </View>
+              
+              {/* Title */}
+              <Text style={dailyCompleteModalStyles.title}>
+                Daily Goal Complete!
+              </Text>
+              
+              {/* Message */}
+              <Text style={dailyCompleteModalStyles.message}>
+                You've already learned your word for today!
+              </Text>
+              
+              {/* Countdown */}
+              <View style={dailyCompleteModalStyles.countdownContainer}>
+                <Text style={dailyCompleteModalStyles.countdownLabel}>
+                  Next word available in:
+                </Text>
+                <View style={dailyCompleteModalStyles.timeContainer}>
+                  <View style={dailyCompleteModalStyles.timeBox}>
+                    <Text style={dailyCompleteModalStyles.timeNumber}>
+                      {timeUntilNext.hours}
+                    </Text>
+                    <Text style={dailyCompleteModalStyles.timeUnit}>hours</Text>
+                  </View>
+                  <Text style={dailyCompleteModalStyles.timeSeparator}>:</Text>
+                  <View style={dailyCompleteModalStyles.timeBox}>
+                    <Text style={dailyCompleteModalStyles.timeNumber}>
+                      {timeUntilNext.minutes}
+                    </Text>
+                    <Text style={dailyCompleteModalStyles.timeUnit}>mins</Text>
+                  </View>
+                  <Text style={dailyCompleteModalStyles.timeSeparator}>:</Text>
+                  <View style={dailyCompleteModalStyles.timeBox}>
+                    <Text style={dailyCompleteModalStyles.timeNumber}>
+                      {timeUntilNext.seconds}
+                    </Text>
+                    <Text style={dailyCompleteModalStyles.timeUnit}>secs</Text>
+                  </View>
+                </View>
+              </View>
+              
+              {/* Encouragement */}
+              <Text style={dailyCompleteModalStyles.encouragement}>
+                Great job on maintaining your learning streak! 🔥
+              </Text>
+              
+              {/* Action Button */}
+              <View style={dailyCompleteModalStyles.buttonWrapper}>
+                <TouchableOpacity 
+                  style={dailyCompleteModalStyles.primaryButton}
+                  onPress={() => {
+                    setShowDailyCompleteModal(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={dailyCompleteModalStyles.primaryButtonText}>
+                    Got it! ✨
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              
+              {/* Floating Dots */}
+              <View style={dailyCompleteModalStyles.floatingDot1} />
+              <View style={dailyCompleteModalStyles.floatingDot2} />
+              <View style={dailyCompleteModalStyles.floatingDot3} />
+            </LinearGradient>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -638,5 +772,166 @@ const styles = StyleSheet.create({
   activeNavLabel: {
     color: '#000',
     fontWeight: '700',
+  },
+});
+
+// Daily Goal Complete Modal Styles
+const dailyCompleteModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  container: {
+    width: '100%',
+    maxWidth: 350,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  gradient: {
+    padding: 32,
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  iconContainer: {
+    marginBottom: 20,
+  },
+  successIcon: {
+    fontSize: 64,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  message: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  countdownContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+  },
+  countdownLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 12,
+    fontWeight: '500',
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeBox: {
+    alignItems: 'center',
+    minWidth: 40,
+  },
+  timeNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  timeUnit: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+  },
+  timeSeparator: {
+    fontSize: 20,
+    color: '#fff',
+    fontWeight: 'bold',
+    marginHorizontal: 6,
+  },
+  encouragement: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    marginBottom: 32,
+    fontWeight: '500',
+  },
+  buttonContainer: {
+    width: '100%',
+    gap: 12,
+  },
+  primaryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 20,
+    paddingHorizontal: 40,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    marginTop: 8,
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  secondaryButtonText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  // Floating animation dots
+  floatingDot1: {
+    position: 'absolute',
+    top: 30,
+    right: 40,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  floatingDot2: {
+    position: 'absolute',
+    bottom: 60,
+    left: 30,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  floatingDot3: {
+    position: 'absolute',
+    top: 120,
+    left: 50,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
 });

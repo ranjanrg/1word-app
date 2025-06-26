@@ -1,698 +1,716 @@
-import config from '../config.js';
+import { supabase } from '../supabase.config.js';
 
-// ⚠️ IMPORTANT: Add your OpenAI API key to config.js
-const OPENAI_API_KEY = config.OPENAI_API_KEY || 'your-openai-api-key-here';
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+// Current user management
+let currentUserId = null;
 
-// Generate similar-looking words for discovery options
-const generateSimilarWord = (targetWord) => {
-  const prefixes = ['pre', 'un', 'dis', 'mis', 'over'];
-  const suffixes = ['ing', 'ed', 'ly', 'tion', 'ness'];
+// Method to set current user (called from AuthContext)
+const setCurrentUser = (userId) => {
+  currentUserId = userId;
+  console.log('👤 DataManager: Current user set to:', currentUserId);
+};
+
+// Default data structure for fallback (keeping your exact structure)
+const DEFAULT_PROGRESS = {
+  wordsLearned: 0,
+  currentStreak: 0,
+  lastLearningDate: null,
+  weeklyProgress: [
+    { day: 'F', date: '13', completed: false },
+    { day: 'S', date: '14', completed: false },
+    { day: 'S', date: '15', completed: false },
+    { day: 'M', date: '16', completed: false },
+    { day: 'T', date: '17', completed: false },
+    { day: 'W', date: '18', completed: false, isToday: true },
+    { day: 'T', date: '19', completed: false },
+  ]
+};
+
+const DEFAULT_PROFILE = {
+  level: 'Beginner',
+  learningGoals: [],
+  joinDate: new Date().toISOString(),
+  username: 'User',
+  fullName: '',
+  email: '',
+  totalWords: 0,
+  streak: 0,
+  isNewUser: true
+};
+
+class DataManager {
   
-  // Sometimes add prefix/suffix, sometimes just similar word
-  if (Math.random() > 0.5 && targetWord.length > 4) {
-    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-    return prefix + targetWord.slice(2);
-  } else {
-    const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
-    return targetWord.slice(0, -2) + suffix;
+  // Set current user (called from AuthContext)
+  static setCurrentUser(userId) {
+    setCurrentUser(userId);
   }
-};
 
-// Generate the 4-step learning flow from the lesson data
-const generateStepsFromLesson = (lesson) => {
-  console.log('🔧 Generating steps from lesson:', lesson);
-  
-  // Ensure lesson object has all required properties
-  const safeLesson = {
-    word: lesson.word || 'journey',
-    emoji: lesson.emoji || '📚',
-    story: lesson.story || 'This is a story about learning new words.',
-    definition: lesson.definition || 'A word to learn',
-    wrongAnswers: lesson.wrongAnswers || ['Wrong 1', 'Wrong 2', 'Wrong 3'],
-    spellingHint: lesson.spellingHint || 'Think about the spelling',
-    usageOptions: lesson.usageOptions || [
-      'This is correct usage',
-      'This is wrong usage 1',
-      'This is wrong usage 2', 
-      'This is wrong usage 3'
-    ]
-  };
-
-  const steps = {
-    1: {
-      type: 'discovery',
-      story: safeLesson.story,
-      options: [
-        safeLesson.word,
-        generateSimilarWord(safeLesson.word),
-        generateSimilarWord(safeLesson.word),
-        generateSimilarWord(safeLesson.word)
-      ].sort(() => Math.random() - 0.5), // Shuffle options
-      correctAnswer: safeLesson.word
-    },
-    2: {
-      type: 'meaning',
-      question: `What does "${safeLesson.word}" mean?`,
-      options: [
-        safeLesson.definition,
-        ...safeLesson.wrongAnswers.slice(0, 3)
-      ].sort(() => Math.random() - 0.5),
-      correctAnswer: safeLesson.definition
-    },
-    3: {
-      type: 'spelling',
-      hint: safeLesson.spellingHint,
-      letters: safeLesson.word.toUpperCase().split('').sort(() => Math.random() - 0.5),
-      correctWord: safeLesson.word.toUpperCase()
-    },
-    4: {
-      type: 'usage',
-      question: `Which sentence uses "${safeLesson.word}" correctly?`,
-      options: safeLesson.usageOptions.slice(0, 4),
-      correctAnswer: safeLesson.usageOptions[0] // First option is correct
+  // Get current authenticated user from Supabase
+  static async getCurrentUser() {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      
+      if (user) {
+        setCurrentUser(user.id);
+        return user;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting current user:', error);
+      return null;
     }
-  };
+  }
 
-  console.log('✅ Generated steps:', steps);
-  return steps;
-};
+  // Initialize fresh user data for new users (Supabase version)
+  static async initializeUserData(userId, fullName, email, username = null) {
+    try {
+      console.log('🔄 Initializing fresh data for new user:', { userId, fullName, email, username });
+      
+      const displayName = fullName || username || (email ? email.split('@')[0] : 'User');
+      const userUsername = username || (email ? email.split('@')[0] : 'User');
+      
+      const freshProfile = {
+        ...DEFAULT_PROFILE,
+        fullName: fullName || '',
+        username: userUsername,
+        email: email,
+        joinDate: new Date().toISOString(),
+        isNewUser: true
+      };
 
-// Validate if a string looks like a real human name
-const isValidHumanName = (name) => {
-  if (!name || typeof name !== 'string') return false;
-  
-  // Remove whitespace and convert to lowercase for checking
-  const cleanName = name.trim().toLowerCase();
-  
-  // Basic validation rules
-  const validationRules = {
-    // Should be between 2-30 characters
-    validLength: cleanName.length >= 2 && cleanName.length <= 30,
-    
-    // Should contain only letters, spaces, hyphens, and apostrophes
-    validCharacters: /^[a-z\s\-']+$/.test(cleanName),
-    
-    // Should not be mostly numbers or special characters
-    notMostlyNumbers: !/^\d+$/.test(cleanName),
-    
-    // Should not contain common username patterns
-    notUsernamePattern: !(/\d{3,}|[_@#$%^&*()+=\[\]{}|\\:";'<>?,./]/.test(cleanName)),
-    
-    // Should not be email-like
-    notEmailLike: !cleanName.includes('@') && !cleanName.includes('.com'),
-    
-    // Should start with a letter
-    startsWithLetter: /^[a-z]/.test(cleanName)
-  };
-  
-  // Must pass all validation rules
-  const isValid = Object.values(validationRules).every(rule => rule === true);
-  
-  console.log('🔍 Name validation for:', name);
-  console.log('📋 Validation results:', validationRules);
-  console.log('✅ Is valid human name:', isValid);
-  
-  return isValid;
-};
+      const freshProgress = {
+        ...DEFAULT_PROGRESS,
+        weeklyProgress: this.generateCurrentWeekProgress()
+      };
 
-// Get user's full name from profile with smart validation
-const getUserName = async () => {
-  try {
-    const DataManager = require('./DataManager').default;
-    const profile = await DataManager.getUserProfile();
+      // Save to Supabase tables
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          full_name: freshProfile.fullName,
+          username: freshProfile.username,
+          email: freshProfile.email,
+          level: freshProfile.level,
+          learning_goals: freshProfile.learningGoals,
+          total_words: freshProfile.totalWords,
+          current_streak: freshProfile.streak,
+          is_new_user: freshProfile.isNewUser
+        });
+
+      if (profileError) throw profileError;
+
+      const { error: progressError } = await supabase
+        .from('user_progress')
+        .upsert({
+          user_id: userId,
+          words_learned: freshProgress.wordsLearned,
+          current_streak: freshProgress.currentStreak,
+          last_learning_date: freshProgress.lastLearningDate,
+          weekly_progress: freshProgress.weeklyProgress
+        });
+
+      // Ignore duplicate key errors (trigger already created the record)
+      if (progressError && progressError.code !== '23505') {
+        throw progressError;
+      }
+      
+      console.log('✅ Fresh user data initialized in Supabase:', fullName);
+      return { profile: freshProfile, progress: freshProgress };
+    } catch (error) {
+      console.error('❌ Error initializing user data:', error);
+      throw error;
+    }
+  }
+
+  // Generate current week progress (keeping your exact logic)
+  static generateCurrentWeekProgress() {
+    const today = new Date();
+    const currentDay = today.getDay();
     
-    // Priority order: fullName -> name -> username -> email username (only if valid)
-    const potentialNames = [
-      profile.fullName,     // NEW: Full name from signup
-      profile.name,
-      profile.username,
-      profile.email ? profile.email.split('@')[0] : null
-    ].filter(Boolean); // Remove null/undefined values
+    const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    const progress = [];
     
-    console.log('🔍 Checking potential names:', potentialNames);
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - currentDay + 1 + i);
+      
+      progress.push({
+        day: daysOfWeek[i],
+        date: date.getDate().toString(),
+        completed: false,
+        isToday: i === (currentDay === 0 ? 6 : currentDay - 1)
+      });
+    }
     
-    // Find the first valid human name
-    for (const name of potentialNames) {
-      if (isValidHumanName(name)) {
-        console.log('👤 Using validated name:', name);
-        return name.trim();
+    return progress;
+  }
+
+  // Get user progress from Supabase
+  static async getUserProgress() {
+    try {
+      const userId = currentUserId;
+      console.log('🔍 Getting progress for user:', userId);
+
+      if (!userId) {
+        console.log('⚠️ No user ID, returning default progress');
+        return DEFAULT_PROGRESS;
+      }
+
+      const { data, error } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        throw error;
+      }
+      
+      if (data) {
+        const progress = {
+          wordsLearned: data.words_learned || 0,
+          currentStreak: data.current_streak || 0,
+          lastLearningDate: data.last_learning_date,
+          weeklyProgress: data.weekly_progress || this.generateCurrentWeekProgress()
+        };
+        console.log('✅ Retrieved user progress from Supabase:', { userId, wordsLearned: progress.wordsLearned, streak: progress.currentStreak });
+        return progress;
+      }
+      
+      // No progress found - create fresh default
+      console.log('⚠️ No progress found for user, creating default');
+      const freshProgress = {
+        ...DEFAULT_PROGRESS,
+        weeklyProgress: this.generateCurrentWeekProgress()
+      };
+      
+      await this.saveUserProgress(freshProgress);
+      return freshProgress;
+    } catch (error) {
+      console.error('❌ Error getting user progress:', error);
+      return DEFAULT_PROGRESS;
+    }
+  }
+
+  // Save user progress to Supabase (fixed version)
+  static async saveUserProgress(progressData) {
+    try {
+      const userId = currentUserId;
+      console.log('💾 Saving progress for user:', userId);
+
+      if (!userId) {
+        console.log('⚠️ No user ID, cannot save progress');
+        return false;
+      }
+
+      // Use upsert with conflict resolution
+      const { data, error } = await supabase
+        .from('user_progress')
+        .upsert({
+          user_id: userId,
+          words_learned: progressData.wordsLearned,
+          current_streak: progressData.currentStreak,
+          last_learning_date: progressData.lastLearningDate,
+          weekly_progress: progressData.weeklyProgress
+        }, {
+          onConflict: 'user_id'
+        })
+        .select();
+
+      if (error) {
+        console.error('❌ Upsert error:', error);
+        
+        // If upsert fails, try regular update
+        const { error: updateError } = await supabase
+          .from('user_progress')
+          .update({
+            words_learned: progressData.wordsLearned,
+            current_streak: progressData.currentStreak,
+            last_learning_date: progressData.lastLearningDate,
+            weekly_progress: progressData.weeklyProgress
+          })
+          .eq('user_id', userId);
+
+        if (updateError) {
+          throw updateError;
+        }
+      }
+      
+      console.log('✅ User progress saved to Supabase:', { userId, wordsLearned: progressData.wordsLearned, streak: progressData.currentStreak });
+      return true;
+    } catch (error) {
+      console.error('❌ Error saving user progress:', error);
+      return false;
+    }
+  }
+
+  // Get learned words from Supabase
+  static async getLearnedWords() {
+    try {
+      const userId = currentUserId;
+
+      if (!userId) {
+        console.log('⚠️ No user ID, returning empty words array');
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('learned_words')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Transform Supabase data to match your existing format
+      const words = (data || []).map(item => ({
+        word: item.word,
+        meaning: item.meaning,
+        emoji: item.emoji || '📖',
+        date: new Date(item.learned_date).toLocaleDateString('en-US', { 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        timestamp: item.created_at
+      }));
+      
+      console.log('✅ Retrieved learned words from Supabase:', { userId, wordCount: words.length });
+      return words;
+    } catch (error) {
+      console.error('❌ Error getting learned words:', error);
+      return [];
+    }
+  }
+
+  // Check daily limit (keeping your exact logic)
+  static async canLearnWordToday() {
+    try {
+      const userId = currentUserId;
+      const today = new Date().toDateString();
+      
+      const learnedWords = await this.getLearnedWords();
+      const todayWords = learnedWords.filter(word => {
+        const wordDate = new Date(word.timestamp).toDateString();
+        return wordDate === today;
+      });
+      
+      console.log('📅 Words learned today:', todayWords.length);
+      
+      const dailyLimit = 1;
+      const canLearn = todayWords.length < dailyLimit;
+      
+      return {
+        canLearn,
+        wordsToday: todayWords.length,
+        dailyLimit,
+        nextWordAvailable: canLearn ? null : this.getNextDayTime()
+      };
+    } catch (error) {
+      console.error('❌ Error checking daily limit:', error);
+      return { canLearn: true, wordsToday: 0, dailyLimit: 1 };
+    }
+  }
+
+  // Get next day time (keeping your exact logic)
+  static getNextDayTime() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    return tomorrow;
+  }
+
+  // Get time until next word (keeping your exact logic with seconds)
+  static getTimeUntilNextWord() {
+    const now = new Date();
+    const tomorrow = this.getNextDayTime();
+    const diff = tomorrow.getTime() - now.getTime();
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    return { hours, minutes, seconds };
+  }
+
+  // Add learned word to Supabase
+  static async addLearnedWord(word, meaning, emoji = '📖') {
+    try {
+      const userId = currentUserId;
+
+      if (!userId) {
+        console.log('⚠️ No user ID, cannot add word');
+        return { success: false, error: 'no_user' };
+      }
+
+      // Check daily limit first (keeping your logic)
+      const limitCheck = await this.canLearnWordToday();
+      if (!limitCheck.canLearn) {
+        console.log('❌ Daily word limit reached');
+        return { 
+          success: false, 
+          error: 'daily_limit_reached',
+          timeUntilNext: this.getTimeUntilNextWord()
+        };
+      }
+
+      // Check if word already exists (Supabase will handle this with UNIQUE constraint)
+      const { data, error } = await supabase
+        .from('learned_words')
+        .insert({
+          user_id: userId,
+          word: word.toLowerCase(), // Store lowercase for consistency
+          meaning: meaning,
+          emoji: emoji,
+          learned_date: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+        })
+        .select();
+
+      if (error) {
+        if (error.code === '23505') { // Unique constraint violation
+          console.log('⚠️ Word already learned by this user:', word);
+          return { success: true, alreadyLearned: true };
+        }
+        throw error;
+      }
+      
+      // Get updated word count
+      const allWords = await this.getLearnedWords();
+      
+      console.log('✅ Word added to Supabase:', { userId, word, totalWords: allWords.length });
+      return { success: true, wordCount: allWords.length };
+    } catch (error) {
+      console.error('❌ Error adding learned word:', error);
+      return { success: false, error: 'storage_error' };
+    }
+  }
+
+  // Update progress after learning (keeping your exact logic)
+  static async updateProgressAfterLearning() {
+    try {
+      const userId = currentUserId;
+
+      const currentProgress = await this.getUserProgress();
+      const today = new Date().toDateString();
+      const lastLearningDate = currentProgress.lastLearningDate;
+      
+      // Your exact streak calculation logic
+      let newStreak = currentProgress.currentStreak;
+      
+      if (lastLearningDate !== today) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        if (lastLearningDate === yesterday.toDateString()) {
+          newStreak = currentProgress.currentStreak + 1;
+        } else if (lastLearningDate === null || lastLearningDate === today) {
+          newStreak = 1;
+        } else {
+          newStreak = 1;
+        }
+      }
+      
+      // Update weekly progress
+      const updatedWeeklyProgress = currentProgress.weeklyProgress.map(day => {
+        if (day.isToday) {
+          return { ...day, completed: true };
+        }
+        return day;
+      });
+      
+      const updatedProgress = {
+        ...currentProgress,
+        wordsLearned: currentProgress.wordsLearned + 1,
+        currentStreak: newStreak,
+        lastLearningDate: today,
+        weeklyProgress: updatedWeeklyProgress
+      };
+      
+      await this.saveUserProgress(updatedProgress);
+      await this.syncProfileWithProgress(updatedProgress);
+      
+      console.log('✅ Progress updated in Supabase:', { 
+        userId, 
+        wordsLearned: updatedProgress.wordsLearned, 
+        streak: updatedProgress.currentStreak 
+      });
+      
+      return updatedProgress;
+    } catch (error) {
+      console.error('❌ Error updating progress:', error);
+      return null;
+    }
+  }
+
+  // Sync profile with progress (Supabase version)
+  static async syncProfileWithProgress(progressData) {
+    try {
+      const userId = currentUserId;
+      
+      if (!userId) return false;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          total_words: progressData.wordsLearned,
+          current_streak: progressData.currentStreak,
+          is_new_user: false
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error syncing profile with progress:', error);
+      return false;
+    }
+  }
+
+  // Get user profile from Supabase
+  static async getUserProfile() {
+    try {
+      const userId = currentUserId;
+
+      if (!userId) {
+        console.log('⚠️ No user ID, returning default profile');
+        return DEFAULT_PROFILE;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      if (data) {
+        const profile = {
+          level: data.level || 'Beginner',
+          learningGoals: data.learning_goals || [],
+          joinDate: data.created_at,
+          username: data.username || 'User',
+          fullName: data.full_name || '',
+          email: data.email || '',
+          totalWords: data.total_words || 0,
+          streak: data.current_streak || 0,
+          isNewUser: data.is_new_user !== false
+        };
+        
+        console.log('✅ Retrieved user profile from Supabase:', { 
+          userId, 
+          fullName: profile.fullName, 
+          level: profile.level, 
+          totalWords: profile.totalWords 
+        });
+        return profile;
+      }
+      
+      // No profile found - this shouldn't happen with triggers, but just in case
+      console.log('⚠️ No profile found for user, returning default');
+      return DEFAULT_PROFILE;
+    } catch (error) {
+      console.error('❌ Error getting user profile:', error);
+      return DEFAULT_PROFILE;
+    }
+  }
+
+  // Save user profile to Supabase
+  static async saveUserProfile(profileData) {
+    try {
+      const userId = currentUserId;
+
+      if (!userId) {
+        console.log('⚠️ No user ID, cannot save profile');
+        return false;
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          level: profileData.level,
+          learning_goals: profileData.learningGoals,
+          username: profileData.username,
+          full_name: profileData.fullName,
+          email: profileData.email,
+          total_words: profileData.totalWords,
+          current_streak: profileData.streak,
+          is_new_user: profileData.isNewUser
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      
+      console.log('✅ User profile saved to Supabase:', { userId, level: profileData.level, fullName: profileData.fullName });
+      return true;
+    } catch (error) {
+      console.error('❌ Error saving user profile:', error);
+      return false;
+    }
+  }
+
+  // Update user level (keeping your exact logic)
+  static async updateUserLevel(level) {
+    try {
+      const currentProfile = await this.getUserProfile();
+      const updatedProfile = {
+        ...currentProfile,
+        level: level
+      };
+      await this.saveUserProfile(updatedProfile);
+      console.log('✅ User level updated:', level);
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating user level:', error);
+      return false;
+    }
+  }
+
+  // Update learning goals (keeping your exact logic)
+  static async updateLearningGoals(goals) {
+    try {
+      const currentProfile = await this.getUserProfile();
+      const updatedProfile = {
+        ...currentProfile,
+        learningGoals: goals
+      };
+      await this.saveUserProfile(updatedProfile);
+      console.log('✅ Learning goals updated');
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating learning goals:', error);
+      return false;
+    }
+  }
+
+  // Update user's full name (keeping your exact logic)
+  static async updateUserFullName(fullName) {
+    try {
+      const currentProfile = await this.getUserProfile();
+      const updatedProfile = {
+        ...currentProfile,
+        fullName: fullName
+      };
+      await this.saveUserProfile(updatedProfile);
+      console.log('✅ User full name updated:', fullName);
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating user full name:', error);
+      return false;
+    }
+  }
+
+  // Handle auth change (modified for Supabase with better error handling)
+  static async handleAuthChange(userId, userInfo = null) {
+    try {
+      if (userId && userId !== 'guest_user') {
+        setCurrentUser(userId);
+        
+        // Check if profile exists (trigger should have created it)
+        const profile = await this.getUserProfile();
+        
+        if (profile === DEFAULT_PROFILE || profile.isNewUser) {
+          // Initialize data if needed, but handle duplicates gracefully
+          const fullName = userInfo?.fullName || userInfo?.name || '';
+          const email = userInfo?.email || 'user@example.com';
+          const username = userInfo?.username || email.split('@')[0];
+          
+          try {
+            await this.initializeUserData(userId, fullName, email, username);
+            console.log('✅ Fresh data created for new authenticated user');
+          } catch (error) {
+            // If it's a duplicate key error, that's fine - data already exists
+            if (error.code === '23505') {
+              console.log('✅ User data already exists (created by trigger)');
+            } else {
+              throw error; // Re-throw other errors
+            }
+          }
+        } else {
+          console.log('✅ Existing user data found');
+        }
+      } else {
+        setCurrentUser(null);
+        console.log('✅ User logged out or guest mode');
+      }
+    } catch (error) {
+      // Don't throw errors that would break auth flow
+      console.error('❌ Error handling auth change:', error);
+      
+      // Still set the user even if there are data errors
+      if (userId && userId !== 'guest_user') {
+        setCurrentUser(userId);
+        console.log('✅ User set despite data initialization error');
       }
     }
-    
-    // If no valid human name found, use generic 'User'
-    console.log('⚠️ No valid human name found, using default: User');
-    return 'User';
-    
-  } catch (error) {
-    console.log('⚠️ Error getting user name, using default: User');
-    return 'User';
   }
-};
 
-// Get user's learning goals from assessment
-const getUserLearningGoals = async () => {
-  try {
-    const DataManager = require('./DataManager').default;
-    const profile = await DataManager.getUserProfile();
-    const goals = profile.learningGoals || [];
-    
-    console.log('🎯 Retrieved learning goals:', goals);
-    return goals;
-  } catch (error) {
-    console.log('⚠️ No learning goals found');
-    return [];
+  // Clear user data (Supabase version)
+  static async clearUserData() {
+    try {
+      const userId = currentUserId;
+
+      if (!userId) {
+        console.log('⚠️ No user ID, cannot clear data');
+        return false;
+      }
+
+      // Delete from all tables (cascading delete should handle this)
+      const { error } = await supabase.auth.admin.deleteUser(userId);
+      
+      if (error) throw error;
+      
+      console.log('✅ User data cleared from Supabase:', userId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error clearing user data:', error);
+      return false;
+    }
   }
-};
 
-// Enhanced word generation prompt with personalization
-const createWordGenerationPrompt = (userLevel, previousWords, learningGoals = [], userName = 'User') => {
-  const excludeWords = previousWords.length > 0 
-    ? `\nDo not use these previously learned words: ${previousWords.join(', ')}`
-    : '';
+  // Reset all data (for testing)
+  static async resetAllData() {
+    try {
+      await this.clearUserData();
+      return true;
+    } catch (error) {
+      console.error('❌ Error resetting data:', error);
+      return false;
+    }
+  }
 
-  // Create learning goals context for story themes
-  const goalsContext = learningGoals.length > 0 
-    ? `\nUser's learning goals: ${learningGoals.join(', ')}. Create stories that relate to these interests when possible.`
-    : '';
-
-  // Level-specific word criteria
-  const levelCriteria = {
-    'Beginner': 'Use common, everyday words (4-7 letters) that appear frequently in daily conversation. Focus on practical, useful vocabulary.',
-    'Intermediate': 'Use moderately challenging words (6-10 letters) that are useful in professional and academic contexts. Include some nuanced vocabulary.',
-    'Advanced': 'Use sophisticated vocabulary (8-15 letters) including academic, professional, and nuanced terms. Challenge the learner with complex concepts.'
-  };
-
-  const wordCriteria = levelCriteria[userLevel] || levelCriteria['Beginner'];
-
-  // Story themes based on learning goals
-  const storyThemes = {
-    'Business': 'workplace scenarios, meetings, networking events, career growth',
-    'Travel': 'exploring new places, cultural experiences, adventures, local interactions',
-    'Technology': 'daily tech use, social media, apps, digital life scenarios',
-    'Health': 'fitness routines, healthy habits, medical visits, wellness activities',
-    'Education': 'learning experiences, school/college life, studying, academic achievements',
-    'Relationships': 'family time, friendships, dating, social gatherings',
-    'Entertainment': 'movies, music, games, hobbies, creative activities',
-    'Food': 'cooking, restaurants, cultural cuisines, family meals'
-  };
-
-  const relevantThemes = learningGoals.map(goal => storyThemes[goal]).filter(Boolean).join(', ');
-  const themeGuidance = relevantThemes 
-    ? `Story themes to consider: ${relevantThemes}.` 
-    : 'Use relatable daily life scenarios.';
-
-  return `You are a vocabulary learning app. Generate a complete word lesson for a ${userLevel} level English learner named ${userName}.
-
-${excludeWords}${goalsContext}
-
-Word Selection Criteria:
-- ${wordCriteria}
-- Choose words that are genuinely useful and relevant to the learner's level
-- Ensure the word matches the user's learning goals when applicable
-
-STORY GENERATION RULES (VERY IMPORTANT):
-- ${userName === 'User' ? 'DO NOT use any names in the story. Use pronouns like "someone", "a person", "they", "he/she" instead.' : `Use the name "${userName}" in the story when naturally possible.`}
-- Create a REAL STORY with characters, actions, and events - NOT an explanation or definition
-- The story must show the word in ACTION through what characters DO, not what they feel or think
-- Use ONLY simple, common words in the story (avoid complex vocabulary)
-- Make the story relatable and engaging for a ${userLevel} learner
-- ${themeGuidance}
-- Story should be 2-3 sentences that flow naturally
-- The target word should appear naturally in context WITHOUT being defined or explained
-- Create realistic, everyday scenarios with specific actions and events
-- Use present tense or simple past tense for clarity
-- Avoid complex sentence structures - keep it conversational
-- NEVER explain what the word means - just show it happening in the story
-
-Please provide your response in exactly this JSON format (no additional text):
-
-{
-  "word": "the target word in lowercase",
-  "emoji": "single relevant emoji",
-  "story": "${userName === 'User' ? 'A 2-3 sentence REAL STORY with characters and actions (NOT explanations). Use simple language without any names. Show the word happening through actions and events, never explain what it means. Use pronouns and general terms like "someone", "a person", "they" instead of names.' : `A 2-3 sentence REAL STORY with characters and actions (NOT explanations). Use simple language that includes ${userName}'s name when natural. Show the word happening through actions and events, never explain what it means.`}",
-  "definition": "Clear, simple definition (max 6 words)",
-  "wrongAnswers": [
-    "plausible wrong definition 1",
-    "plausible wrong definition 2", 
-    "plausible wrong definition 3"
-  ],
-  "spellingHint": "A helpful hint for spelling (max 8 words)",
-  "usageOptions": [
-    "correct usage example appropriate for ${userLevel} level",
-    "wrong usage example 1",
-    "wrong usage example 2",
-    "wrong usage example 3"
-  ]
+  // Get user statistics (keeping your exact logic)
+  static async getUserStats() {
+    try {
+      const profile = await this.getUserProfile();
+      const progress = await this.getUserProgress();
+      const learnedWords = await this.getLearnedWords();
+      
+      return {
+        totalWords: progress.wordsLearned || learnedWords.length,
+        streak: progress.currentStreak || 0,
+        level: profile.level || 'Beginner',
+        fullName: profile.fullName || '',
+        joinDate: profile.joinDate,
+        lastLearningDate: progress.lastLearningDate,
+        recentWords: learnedWords.slice(0, 5)
+      };
+    } catch (error) {
+      console.error('❌ Error getting user stats:', error);
+      return {
+        totalWords: 0,
+        streak: 0,
+        level: 'Beginner',
+        fullName: '',
+        joinDate: new Date().toISOString(),
+        lastLearningDate: null,
+        recentWords: []
+      };
+    }
+  }
 }
 
-Requirements:
-- Word must be appropriate for ${userLevel} level vocabulary
-- Story MUST use simple, easy-to-understand language regardless of target word complexity
-- ${userName === 'User' ? 'DO NOT include any names in the story. Use natural pronouns and terms like "someone", "a person", "they", "he/she"' : `Include ${userName}'s name naturally when it makes sense`}
-- Connect story to user's interests: ${learningGoals.join(', ') || 'general daily life'}
-- Wrong answers should be believable but clearly different
-- Usage examples should be realistic scenarios suitable for this level
-- Keep everything concise and clear
-- Respond with ONLY the JSON object, no extra text
-
-Generate the lesson now:`;
-};
-
-// Parse OpenAI's response into structured data
-const parseWordLesson = (content) => {
-  try {
-    console.log('🔍 Parsing content:', content);
-    
-    // Clean the content - remove any markdown formatting or extra text
-    let cleanContent = content.trim();
-    
-    // Remove markdown code blocks if present
-    cleanContent = cleanContent.replace(/```json\n?/g, '');
-    cleanContent = cleanContent.replace(/```\n?/g, '');
-    
-    // Extract JSON from the response
-    const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('❌ No JSON found in response');
-      console.error('📄 Raw content:', content);
-      throw new Error('No valid JSON found in API response');
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    console.log('✅ Parsed JSON:', parsed);
-    
-    // Validate required fields
-    if (!parsed.word || !parsed.story || !parsed.definition) {
-      console.error('❌ Missing required fields in parsed data');
-      throw new Error('Invalid lesson structure from API');
-    }
-
-    // Ensure arrays exist and have correct length
-    if (!parsed.wrongAnswers || !Array.isArray(parsed.wrongAnswers) || parsed.wrongAnswers.length < 3) {
-      parsed.wrongAnswers = ['Wrong answer 1', 'Wrong answer 2', 'Wrong answer 3'];
-    }
-
-    if (!parsed.usageOptions || !Array.isArray(parsed.usageOptions) || parsed.usageOptions.length < 4) {
-      parsed.usageOptions = [
-        `This is how you use ${parsed.word} correctly.`,
-        'This is wrong usage 1',
-        'This is wrong usage 2',
-        'This is wrong usage 3'
-      ];
-    }
-
-    const result = {
-      targetWord: parsed.word.toLowerCase(),
-      emoji: parsed.emoji || '📚',
-      story: parsed.story,
-      definition: parsed.definition,
-      wrongAnswers: parsed.wrongAnswers.slice(0, 3),
-      spellingHint: parsed.spellingHint || 'Think about the sounds',
-      usageOptions: parsed.usageOptions.slice(0, 4),
-      // Generate step data for the learning flow
-      steps: generateStepsFromLesson(parsed)
-    };
-
-    console.log('✅ Final lesson result:', result);
-    return result;
-
-  } catch (error) {
-    console.error('❌ Error parsing word lesson:', error);
-    console.error('📄 Original content:', content);
-    throw new Error(`Failed to parse lesson data: ${error.message}`);
-  }
-};
-
-// Enhanced fallback lesson with personalization
-const getFallbackLesson = async () => {
-  console.log('📚 Using enhanced fallback lesson');
-  
-  const userName = await getUserName();
-  const learningGoals = await getUserLearningGoals();
-  
-  const fallbackWords = [
-    {
-      targetWord: 'journey',
-      emoji: '🚗',
-      story: `${userName} was excited about the long road trip ahead. The family packed snacks and games for their adventure to the mountains. Everyone was looking forward to the fun experience together.`,
-      definition: 'Travel from one place to another',
-      wrongAnswers: ['A place to sleep', 'Something to eat', 'A type of music'],
-      spellingHint: 'Starts with "jou", ends with "ney"',
-      usageOptions: [
-        `${userName} went on a journey to the mountains.`,
-        'Let\'s have a picnic in a park.',
-        'We enjoyed shopping at a mall.',
-        'We watched a movie at home.'
-      ]
-    },
-    {
-      targetWord: 'courage',
-      emoji: '🦁',
-      story: `${userName} was nervous about speaking in front of the class. When the teacher called on them, they took a deep breath and stood up. Despite feeling scared, ${userName} shared their ideas with confidence.`,
-      definition: 'Bravery in difficult situations',
-      wrongAnswers: ['Fear of danger', 'Anger at others', 'Confusion about choices'],
-      spellingHint: 'Sounds like "care-age"',
-      usageOptions: [
-        `It took courage for ${userName} to speak up.`,
-        'She courage her way through traffic.',
-        'The courage weather was perfect today.',
-        'He courage his homework before dinner.'
-      ]
-    },
-    {
-      targetWord: 'wisdom',
-      emoji: '🦉',
-      story: `When ${userName} had a difficult decision to make, they asked their grandmother for advice. She listened carefully and then shared a helpful story from her own life. Her thoughtful guidance helped ${userName} see the situation more clearly.`,
-      definition: 'Good judgment and knowledge',
-      wrongAnswers: ['Lack of understanding', 'Quick decision making', 'Following others blindly'],
-      spellingHint: 'Starts with "wis", ends with "dom"',
-      usageOptions: [
-        `${userName}'s grandmother shared her wisdom about life.`,
-        'The wisdom rain fell all day.',
-        'He wisdom his lunch quickly.',
-        'They wisdom walked to school.'
-      ]
-    }
-  ];
-
-  // Pick a random fallback word
-  const randomFallback = fallbackWords[Math.floor(Math.random() * fallbackWords.length)];
-  
-  const lesson = {
-    ...randomFallback,
-    steps: generateStepsFromLesson({
-      word: randomFallback.targetWord,
-      emoji: randomFallback.emoji,
-      story: randomFallback.story,
-      definition: randomFallback.definition,
-      wrongAnswers: randomFallback.wrongAnswers,
-      spellingHint: randomFallback.spellingHint,
-      usageOptions: randomFallback.usageOptions
-    })
-  };
-
-  console.log('✅ Personalized fallback lesson ready:', lesson.targetWord);
-  return lesson;
-};
-
-// Get user's learning level from storage
-const getUserLevel = async () => {
-  try {
-    const DataManager = require('./DataManager').default;
-    const profile = await DataManager.getUserProfile();
-    return profile.level || 'Beginner';
-  } catch (error) {
-    console.log('⚠️ Using default level: Beginner');
-    return 'Beginner';
-  }
-};
-
-// Get ALL previously learned words to avoid repetition
-const getPreviousWords = async () => {
-  try {
-    const DataManager = require('./DataManager').default;
-    const learnedWords = await DataManager.getLearnedWords();
-    
-    // Get ALL words the user has learned (not just last 10)
-    const allLearnedWords = learnedWords.map(item => item.word.toLowerCase());
-    
-    console.log(`📚 User has learned ${allLearnedWords.length} words total`);
-    console.log('🚫 Excluding these words:', allLearnedWords);
-    
-    return allLearnedWords;
-  } catch (error) {
-    console.log('⚠️ No previous words found');
-    return [];
-  }
-};
-
-// Generate a new word with story, meaning, and usage based on user level
-const generateWordLesson = async (userLevel = 'Beginner', previousWords = [], learningGoals = [], userName = 'User') => {
-  try {
-    const prompt = createWordGenerationPrompt(userLevel, previousWords, learningGoals, userName);
-    
-    console.log('🔑 Making API request to OpenAI...');
-    console.log('🔍 API Key length:', OPENAI_API_KEY ? OPENAI_API_KEY.length : 'undefined');
-    console.log('🔍 API Key starts with:', OPENAI_API_KEY ? OPENAI_API_KEY.substring(0, 10) + '...' : 'undefined');
-    
-    const requestBody = {
-      model: 'gpt-3.5-turbo', // Cost-effective model
-      max_tokens: 1500,
-      temperature: 0.7,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert vocabulary teacher creating engaging word lessons. Always respond with valid JSON only, no additional text.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    };
-
-    console.log('📤 Request sent to OpenAI');
-    
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    console.log('📥 Response status:', response.status);
-
-    if (!response.ok) {
-      // Get detailed error info
-      const errorData = await response.json();
-      console.error('❌ API Error Details:', errorData);
-      
-      // Handle specific errors
-      if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please try again in a moment.');
-      } else if (response.status === 401) {
-        throw new Error('Invalid API key. Please check your configuration.');
-      } else {
-        throw new Error(`API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-      }
-    }
-
-    const data = await response.json();
-    console.log('✅ Got response from OpenAI!');
-    
-    const content = data.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No content in OpenAI response');
-    }
-    
-    return parseWordLesson(content);
-    
-  } catch (error) {
-    console.error('❌ Error generating word lesson:', error.message);
-    console.error('🔍 Full error:', error);
-    throw error; // Re-throw to be handled by caller
-  }
-};
-
-// Enhanced API health check
-const checkApiHealth = async () => {
-  try {
-    console.log('🔍 Checking OpenAI API health...');
-    
-    if (!OPENAI_API_KEY || OPENAI_API_KEY === 'your-openai-api-key-here') {
-      return {
-        status: 'error',
-        message: 'API key not configured',
-        canGenerate: false
-      };
-    }
-
-    // Test with minimal request
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'Hi' }]
-      })
-    });
-
-    const data = await response.json();
-
-    if (response.status === 429) {
-      return {
-        status: 'quota_exceeded',
-        message: 'API quota exceeded. Please add credits to your OpenAI account.',
-        error: data.error,
-        canGenerate: false,
-        action: 'Add billing at https://platform.openai.com/account/billing'
-      };
-    }
-
-    if (response.status === 401) {
-      return {
-        status: 'invalid_key',
-        message: 'Invalid API key',
-        canGenerate: false,
-        action: 'Check your API key in config.js'
-      };
-    }
-
-    if (!response.ok) {
-      return {
-        status: 'error',
-        message: `API Error: ${response.status}`,
-        error: data.error,
-        canGenerate: false
-      };
-    }
-
-    return {
-      status: 'healthy',
-      message: 'API is working correctly',
-      canGenerate: true,
-      tokensUsed: data.usage?.total_tokens || 0
-    };
-
-  } catch (error) {
-    return {
-      status: 'network_error',
-      message: 'Network connection failed',
-      error: error.message,
-      canGenerate: false
-    };
-  }
-};
-
-// Enhanced main method to get a complete lesson with personalization
-const getNewLesson = async () => {
-  try {
-    console.log('🎯 Getting personalized lesson...');
-    
-    // Get all user data
-    const [userLevel, previousWords, learningGoals, userName] = await Promise.all([
-      getUserLevel(),
-      getPreviousWords(),
-      getUserLearningGoals(),
-      getUserName()
-    ]);
-    
-    console.log('👤 User level:', userLevel);
-    console.log('👤 User name:', userName);
-    console.log('📝 Total learned words:', previousWords.length);
-    console.log('🎯 Learning goals:', learningGoals);
-    
-    const lesson = await generateWordLesson(userLevel, previousWords, learningGoals, userName);
-    
-    // Validate lesson structure before returning
-    if (!lesson || !lesson.targetWord || !lesson.steps) {
-      console.error('❌ Invalid lesson structure, using fallback');
-      return getFallbackLesson();
-    }
-
-    console.log('✅ Personalized lesson generated:', lesson.targetWord);
-    return lesson;
-  } catch (error) {
-    console.error('❌ Error getting new lesson:', error);
-    return getFallbackLesson();
-  }
-};
-
-// Test the API connection with simpler request
-const testConnection = async () => {
-  try {
-    console.log('🧪 Testing OpenAI API connection...');
-    console.log('🔍 API Key check:', OPENAI_API_KEY ? 'Present' : 'Missing');
-    
-    if (!OPENAI_API_KEY || OPENAI_API_KEY === 'your-openai-api-key-here') {
-      throw new Error('OpenAI API key is missing or not configured');
-    }
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        max_tokens: 50,
-        messages: [{
-          role: 'user',
-          content: 'Respond with just "API connection successful"'
-        }]
-      })
-    });
-
-    console.log('🧪 Test response status:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ API test failed:', errorData);
-      throw new Error(`API test failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
-    }
-
-    const data = await response.json();
-    console.log('✅ Test successful:', data);
-    return data.choices[0]?.message?.content?.includes('successful') || false;
-  } catch (error) {
-    console.error('❌ OpenAI API connection test failed:', error.message);
-    return false;
-  }
-};
-
-// Helper method to check if API is configured
-const isApiConfigured = () => {
-  return OPENAI_API_KEY && OPENAI_API_KEY !== 'your-openai-api-key-here';
-};
-
-// Get API status
-const getApiStatus = () => {
-  return {
-    provider: 'OpenAI',
-    isConfigured: isApiConfigured(),
-    keyPreview: OPENAI_API_KEY 
-      ? `${OPENAI_API_KEY.substring(0, 8)}...${OPENAI_API_KEY.substring(OPENAI_API_KEY.length - 4)}`
-      : 'Not configured',
-    model: 'gpt-3.5-turbo'
-  };
-};
-
-// Cost tracking utility
-const getUsageEstimate = () => {
-  return {
-    tokensPerLesson: 450,
-    costPerLesson: 0.0025, // Approximate cost in USD
-    lessonsWithFiveDollars: 2000,
-    message: 'Your $5 credit should last for approximately 2000 lessons!'
-  };
-};
-
-// Export as an object with all methods
-const ClaudeService = {
-  checkApiHealth,
-  generateWordLesson,
-  createWordGenerationPrompt,
-  parseWordLesson,
-  generateStepsFromLesson,
-  generateSimilarWord,
-  getFallbackLesson,
-  getUserLevel,
-  getUserName,
-  getUserLearningGoals,
-  getPreviousWords,
-  getNewLesson,
-  testConnection,
-  isApiConfigured,
-  getApiStatus,
-  getUsageEstimate
-};
-
-export default ClaudeService;
+export default DataManager;

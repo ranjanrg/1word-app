@@ -10,7 +10,8 @@ import {
   Animated,
   StatusBar,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,6 +25,7 @@ const SignupScreen = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -107,10 +109,10 @@ const SignupScreen = ({ navigation, route }) => {
         }
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          'Welcome to OneWord! 🎉', 
-          `Hi ${name.split(' ')[0]}! Your account has been created successfully!\n\nLevel: ${userLevel}\nGoals: ${learningGoals.length} selected\n\nYou're all set to start learning!`
-        );
+        
+        // Show custom welcome modal instead of Alert.alert
+        setShowWelcomeModal(true);
+        
         // Navigation will be handled automatically by AuthContext
       } else {
         console.error('❌ Signup failed:', result.error);
@@ -357,6 +359,88 @@ const SignupScreen = ({ navigation, route }) => {
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      {/* Custom Welcome Modal */}
+      <Modal
+        transparent={true}
+        visible={showWelcomeModal}
+        animationType="fade"
+        onRequestClose={() => setShowWelcomeModal(false)}
+      >
+        <View style={welcomeModalStyles.overlay}>
+          <Animated.View 
+            style={[
+              welcomeModalStyles.container,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: slideAnim.interpolate({ inputRange: [0, 50], outputRange: [1, 0.8] }) }],
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={['#000', '#2d3436']}
+              style={welcomeModalStyles.gradient}
+            >
+              {/* Celebration Icon */}
+              <View style={welcomeModalStyles.iconContainer}>
+                <Text style={welcomeModalStyles.celebrationIcon}>🎉</Text>
+              </View>
+              
+              {/* Welcome Message */}
+              <Text style={welcomeModalStyles.title}>
+                Welcome to OneWord!
+              </Text>
+              
+              <Text style={welcomeModalStyles.greeting}>
+                Hi {name.split(' ')[0]}! 👋
+              </Text>
+              
+              <Text style={welcomeModalStyles.message}>
+                Your account has been created successfully!
+              </Text>
+              
+              {/* User Stats */}
+              <View style={welcomeModalStyles.statsContainer}>
+                <View style={welcomeModalStyles.statItem}>
+                  <Text style={welcomeModalStyles.statEmoji}>📚</Text>
+                  <Text style={welcomeModalStyles.statLabel}>Level</Text>
+                  <Text style={welcomeModalStyles.statValue}>{userLevel}</Text>
+                </View>
+                
+                <View style={welcomeModalStyles.divider} />
+                
+                <View style={welcomeModalStyles.statItem}>
+                  <Text style={welcomeModalStyles.statEmoji}>🎯</Text>
+                  <Text style={welcomeModalStyles.statLabel}>Goals</Text>
+                  <Text style={welcomeModalStyles.statValue}>{learningGoals.length} selected</Text>
+                </View>
+              </View>
+              
+              <Text style={welcomeModalStyles.subtitle}>
+                You're all set to start learning!
+              </Text>
+              
+              {/* Action Button */}
+              <TouchableOpacity 
+                style={welcomeModalStyles.button}
+                onPress={() => {
+                  setShowWelcomeModal(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                }}
+              >
+                <Text style={welcomeModalStyles.buttonText}>
+                  Start Learning! ✨
+                </Text>
+              </TouchableOpacity>
+              
+              {/* Floating Dots for Animation */}
+              <View style={welcomeModalStyles.floatingDot1} />
+              <View style={welcomeModalStyles.floatingDot2} />
+              <View style={welcomeModalStyles.floatingDot3} />
+            </LinearGradient>
+          </Animated.View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -526,6 +610,148 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+});
+
+// Welcome Modal Styles
+const welcomeModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  container: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  gradient: {
+    padding: 32,
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  iconContainer: {
+    marginBottom: 20,
+  },
+  celebrationIcon: {
+    fontSize: 64,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  greeting: {
+    fontSize: 20,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontWeight: '600',
+  },
+  message: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statEmoji: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  divider: {
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 20,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    marginBottom: 32,
+    fontWeight: '500',
+  },
+  button: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  // Floating animation dots
+  floatingDot1: {
+    position: 'absolute',
+    top: 30,
+    right: 40,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  floatingDot2: {
+    position: 'absolute',
+    bottom: 60,
+    left: 30,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  floatingDot3: {
+    position: 'absolute',
+    top: 120,
+    left: 50,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
 });
 

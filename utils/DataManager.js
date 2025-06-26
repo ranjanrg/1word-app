@@ -1,27 +1,15 @@
-import * as SecureStore from 'expo-secure-store';
+import { supabase } from '../supabase.config.js';
 
-const STORAGE_KEYS = {
-  USER_PROGRESS: 'user_progress',
-  LEARNED_WORDS: 'learned_words',
-  USER_PROFILE: 'user_profile'
-};
-
-// Simple way to get current user ID without importing Supabase
-// We'll pass the userId from the AuthContext instead
-let currentUserId = 'guest_user';
+// Current user management
+let currentUserId = null;
 
 // Method to set current user (called from AuthContext)
 const setCurrentUser = (userId) => {
-  currentUserId = userId || 'guest_user';
+  currentUserId = userId;
   console.log('👤 DataManager: Current user set to:', currentUserId);
 };
 
-// Generate user-specific storage keys
-const getUserStorageKey = (userId, keyType) => {
-  return `user_${userId}_${keyType}`;
-};
-
-// Default data structure
+// Default data structure for fallback (keeping your exact structure)
 const DEFAULT_PROGRESS = {
   wordsLearned: 0,
   currentStreak: 0,
@@ -42,7 +30,7 @@ const DEFAULT_PROFILE = {
   learningGoals: [],
   joinDate: new Date().toISOString(),
   username: 'User',
-  fullName: '',        // Added for full name storage
+  fullName: '',
   email: '',
   totalWords: 0,
   streak: 0,
@@ -56,19 +44,35 @@ class DataManager {
     setCurrentUser(userId);
   }
 
-  // Initialize fresh user data for new users with full name support
+  // Get current authenticated user from Supabase
+  static async getCurrentUser() {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      
+      if (user) {
+        setCurrentUser(user.id);
+        return user;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting current user:', error);
+      return null;
+    }
+  }
+
+  // Initialize fresh user data for new users (Supabase version)
   static async initializeUserData(userId, fullName, email, username = null) {
     try {
       console.log('🔄 Initializing fresh data for new user:', { userId, fullName, email, username });
       
-      // Use fullName if provided, otherwise fall back to username or email
       const displayName = fullName || username || (email ? email.split('@')[0] : 'User');
       const userUsername = username || (email ? email.split('@')[0] : 'User');
       
       const freshProfile = {
         ...DEFAULT_PROFILE,
-        fullName: fullName || '',           // Store the actual full name
-        username: userUsername,             // Store username separately
+        fullName: fullName || '',
+        username: userUsername,
         email: email,
         joinDate: new Date().toISOString(),
         isNewUser: true
@@ -79,18 +83,39 @@ class DataManager {
         weeklyProgress: this.generateCurrentWeekProgress()
       };
 
-      // Save fresh data with user-specific keys
-      const profileKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROFILE);
-      const progressKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROGRESS);
-      const wordsKey = getUserStorageKey(userId, STORAGE_KEYS.LEARNED_WORDS);
+      // Save to Supabase tables
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          full_name: freshProfile.fullName,
+          username: freshProfile.username,
+          email: freshProfile.email,
+          level: freshProfile.level,
+          learning_goals: freshProfile.learningGoals,
+          total_words: freshProfile.totalWords,
+          current_streak: freshProfile.streak,
+          is_new_user: freshProfile.isNewUser
+        });
 
-      await Promise.all([
-        SecureStore.setItemAsync(profileKey, JSON.stringify(freshProfile)),
-        SecureStore.setItemAsync(progressKey, JSON.stringify(freshProgress)),
-        SecureStore.setItemAsync(wordsKey, JSON.stringify([]))
-      ]);
+      if (profileError) throw profileError;
+
+      const { error: progressError } = await supabase
+        .from('user_progress')
+        .upsert({
+          user_id: userId,
+          words_learned: freshProgress.wordsLearned,
+          current_streak: freshProgress.currentStreak,
+          last_learning_date: freshProgress.lastLearningDate,
+          weekly_progress: freshProgress.weeklyProgress
+        });
+
+      // Ignore duplicate key errors (trigger already created the record)
+      if (progressError && progressError.code !== '23505') {
+        throw progressError;
+      }
       
-      console.log('✅ Fresh user data initialized with full name:', fullName);
+      console.log('✅ Fresh user data initialized in Supabase:', fullName);
       return { profile: freshProfile, progress: freshProgress };
     } catch (error) {
       console.error('❌ Error initializing user data:', error);
@@ -98,53 +123,93 @@ class DataManager {
     }
   }
 
-  // Generate current week progress based on actual dates
+  // Generate current week progress (keeping your exact logic)
   static generateCurrentWeekProgress() {
     const today = new Date();
-    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const currentDay = today.getDay();
     
-    // Start from Monday (1) to Sunday (0)
     const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     const progress = [];
     
     for (let i = 0; i < 7; i++) {
       const date = new Date(today);
-      date.setDate(today.getDate() - currentDay + 1 + i); // Start from Monday
+      date.setDate(today.getDate() - currentDay + 1 + i);
       
       progress.push({
         day: daysOfWeek[i],
         date: date.getDate().toString(),
         completed: false,
-        isToday: i === (currentDay === 0 ? 6 : currentDay - 1) // Adjust for Sunday = 0
+        isToday: i === (currentDay === 0 ? 6 : currentDay - 1)
       });
     }
     
     return progress;
   }
 
-  // Get user progress data with user isolation
+  // Get user progress from Supabase with real-time streak checking
   static async getUserProgress() {
     try {
       const userId = currentUserId;
       console.log('🔍 Getting progress for user:', userId);
 
-      const progressKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROGRESS);
-      const data = await SecureStore.getItemAsync(progressKey);
+      if (!userId) {
+        console.log('⚠️ No user ID, returning default progress');
+        return DEFAULT_PROGRESS;
+      }
+
+      const { data, error } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        throw error;
+      }
       
       if (data) {
-        const progress = JSON.parse(data);
-        console.log('✅ Retrieved user progress:', { userId, wordsLearned: progress.wordsLearned, streak: progress.currentStreak });
+        const progress = {
+          wordsLearned: data.words_learned || 0,
+          currentStreak: data.current_streak || 0,
+          lastLearningDate: data.last_learning_date,
+          weeklyProgress: data.weekly_progress || this.generateCurrentWeekProgress()
+        };
+
+        // Check if streak should be reset to 0 due to missed days
+        const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        const lastLearningDate = progress.lastLearningDate;
+        
+        if (lastLearningDate && progress.currentStreak > 0) {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toLocaleDateString('en-CA');
+          
+          // If last learning was not yesterday or today, streak is broken
+          if (lastLearningDate !== yesterdayStr && lastLearningDate !== today) {
+            console.log('💔 Streak expired - last learning:', lastLearningDate, 'yesterday:', yesterdayStr);
+            progress.currentStreak = 0;
+            
+            // Update database to reflect broken streak
+            await this.saveUserProgress({
+              wordsLearned: progress.wordsLearned,
+              currentStreak: 0,
+              lastLearningDate: progress.lastLearningDate,
+              weeklyProgress: progress.weeklyProgress
+            });
+          }
+        }
+
+        console.log('✅ Retrieved user progress from Supabase:', { userId, wordsLearned: progress.wordsLearned, streak: progress.currentStreak });
         return progress;
       }
       
-      // No progress found - return fresh default
-      console.log('⚠️ No progress found for user, returning default');
+      // No progress found - create fresh default
+      console.log('⚠️ No progress found for user, creating default');
       const freshProgress = {
         ...DEFAULT_PROGRESS,
         weeklyProgress: this.generateCurrentWeekProgress()
       };
       
-      // Save the fresh progress
       await this.saveUserProgress(freshProgress);
       return freshProgress;
     } catch (error) {
@@ -153,15 +218,51 @@ class DataManager {
     }
   }
 
-  // Save user progress data with user isolation
+  // Save user progress to Supabase (fixed version)
   static async saveUserProgress(progressData) {
     try {
       const userId = currentUserId;
       console.log('💾 Saving progress for user:', userId);
 
-      const progressKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROGRESS);
-      await SecureStore.setItemAsync(progressKey, JSON.stringify(progressData));
-      console.log('✅ User progress saved:', { userId, wordsLearned: progressData.wordsLearned, streak: progressData.currentStreak });
+      if (!userId) {
+        console.log('⚠️ No user ID, cannot save progress');
+        return false;
+      }
+
+      // Use upsert with conflict resolution
+      const { data, error } = await supabase
+        .from('user_progress')
+        .upsert({
+          user_id: userId,
+          words_learned: progressData.wordsLearned,
+          current_streak: progressData.currentStreak,
+          last_learning_date: progressData.lastLearningDate,
+          weekly_progress: progressData.weeklyProgress
+        }, {
+          onConflict: 'user_id'
+        })
+        .select();
+
+      if (error) {
+        console.error('❌ Upsert error:', error);
+        
+        // If upsert fails, try regular update
+        const { error: updateError } = await supabase
+          .from('user_progress')
+          .update({
+            words_learned: progressData.wordsLearned,
+            current_streak: progressData.currentStreak,
+            last_learning_date: progressData.lastLearningDate,
+            weekly_progress: progressData.weeklyProgress
+          })
+          .eq('user_id', userId);
+
+        if (updateError) {
+          throw updateError;
+        }
+      }
+      
+      console.log('✅ User progress saved to Supabase:', { userId, wordsLearned: progressData.wordsLearned, streak: progressData.currentStreak });
       return true;
     } catch (error) {
       console.error('❌ Error saving user progress:', error);
@@ -169,18 +270,37 @@ class DataManager {
     }
   }
 
-  
-
-  // Get learned words history with user isolation
+  // Get learned words from Supabase
   static async getLearnedWords() {
     try {
       const userId = currentUserId;
 
-      const wordsKey = getUserStorageKey(userId, STORAGE_KEYS.LEARNED_WORDS);
-      const data = await SecureStore.getItemAsync(wordsKey);
+      if (!userId) {
+        console.log('⚠️ No user ID, returning empty words array');
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('learned_words')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
       
-      const words = data ? JSON.parse(data) : [];
-      console.log('✅ Retrieved learned words:', { userId, wordCount: words.length });
+      if (error) throw error;
+      
+      // Transform Supabase data to match your existing format
+      const words = (data || []).map(item => ({
+        word: item.word,
+        meaning: item.meaning,
+        emoji: item.emoji || '📖',
+        date: new Date(item.learned_date).toLocaleDateString('en-US', { 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        timestamp: item.created_at
+      }));
+      
+      console.log('✅ Retrieved learned words from Supabase:', { userId, wordCount: words.length });
       return words;
     } catch (error) {
       console.error('❌ Error getting learned words:', error);
@@ -188,13 +308,12 @@ class DataManager {
     }
   }
 
-  // Check if user can learn a word today (daily limit)
+  // Check daily limit (keeping your exact logic)
   static async canLearnWordToday() {
     try {
       const userId = currentUserId;
       const today = new Date().toDateString();
       
-      // Get today's learned words
       const learnedWords = await this.getLearnedWords();
       const todayWords = learnedWords.filter(word => {
         const wordDate = new Date(word.timestamp).toDateString();
@@ -203,7 +322,6 @@ class DataManager {
       
       console.log('📅 Words learned today:', todayWords.length);
       
-      // Free users can learn 1 word per day
       const dailyLimit = 1;
       const canLearn = todayWords.length < dailyLimit;
       
@@ -215,19 +333,19 @@ class DataManager {
       };
     } catch (error) {
       console.error('❌ Error checking daily limit:', error);
-      return { canLearn: true, wordsToday: 0, dailyLimit: 1 }; // Default to allowing if error
+      return { canLearn: true, wordsToday: 0, dailyLimit: 1 };
     }
   }
 
-  // Get time when next word will be available (tomorrow)
+  // Get next day time (keeping your exact logic)
   static getNextDayTime() {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0); // Start of tomorrow
+    tomorrow.setHours(0, 0, 0, 0);
     return tomorrow;
   }
 
-  // Get remaining time until next word
+  // Get time until next word (keeping your exact logic with seconds)
   static getTimeUntilNextWord() {
     const now = new Date();
     const tomorrow = this.getNextDayTime();
@@ -235,16 +353,22 @@ class DataManager {
     
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
     
-    return { hours, minutes };
+    return { hours, minutes, seconds };
   }
 
-  // Add a new learned word with user isolation
+  // Add learned word to Supabase
   static async addLearnedWord(word, meaning, emoji = '📖') {
     try {
       const userId = currentUserId;
 
-      // Check daily limit first
+      if (!userId) {
+        console.log('⚠️ No user ID, cannot add word');
+        return { success: false, error: 'no_user' };
+      }
+
+      // Check daily limit first (keeping your logic)
       const limitCheck = await this.canLearnWordToday();
       if (!limitCheck.canLearn) {
         console.log('❌ Daily word limit reached');
@@ -255,71 +379,78 @@ class DataManager {
         };
       }
 
-      const existingWords = await this.getLearnedWords();
-      
-      // Check if word already exists for this user
-      const wordExists = existingWords.some(w => w.word.toLowerCase() === word.toLowerCase());
-      if (wordExists) {
-        console.log('⚠️ Word already learned by this user:', word);
-        return { success: true, alreadyLearned: true }; // Don't add duplicate, but return success
-      }
+      // Check if word already exists (Supabase will handle this with UNIQUE constraint)
+      const { data, error } = await supabase
+        .from('learned_words')
+        .insert({
+          user_id: userId,
+          word: word.toLowerCase(), // Store lowercase for consistency
+          meaning: meaning,
+          emoji: emoji,
+          learned_date: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+        })
+        .select();
 
-      const newWord = {
-        word: word,
-        meaning: meaning,
-        emoji: emoji,
-        date: new Date().toLocaleDateString('en-US', { 
-          month: 'long', 
-          day: 'numeric' 
-        }),
-        timestamp: new Date().toISOString()
-      };
+      if (error) {
+        if (error.code === '23505') { // Unique constraint violation
+          console.log('⚠️ Word already learned by this user:', word);
+          return { success: true, alreadyLearned: true };
+        }
+        throw error;
+      }
       
-      // Add to beginning of array (most recent first)
-      const updatedWords = [newWord, ...existingWords];
+      // Get updated word count
+      const allWords = await this.getLearnedWords();
       
-      // Keep all words (removed the 10 word limit)
-      const wordsKey = getUserStorageKey(userId, STORAGE_KEYS.LEARNED_WORDS);
-      await SecureStore.setItemAsync(wordsKey, JSON.stringify(updatedWords));
-      
-      console.log('✅ Word added for user:', { userId, word, totalWords: updatedWords.length });
-      return { success: true, wordCount: updatedWords.length };
+      console.log('✅ Word added to Supabase:', { userId, word, totalWords: allWords.length });
+      return { success: true, wordCount: allWords.length };
     } catch (error) {
       console.error('❌ Error adding learned word:', error);
       return { success: false, error: 'storage_error' };
     }
   }
 
-  // Update progress after learning a word with user isolation
+  // Update progress after learning with proper streak logic
   static async updateProgressAfterLearning() {
     try {
       const userId = currentUserId;
 
       const currentProgress = await this.getUserProgress();
-      const today = new Date().toDateString();
+      
+      // Proper streak calculation with timezone handling
+      const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local timezone
       const lastLearningDate = currentProgress.lastLearningDate;
       
-      // Calculate new streak
-      let newStreak = currentProgress.currentStreak;
+      console.log('📅 Streak calculation:', { today, lastLearningDate, currentStreak: currentProgress.currentStreak });
       
-      if (lastLearningDate !== today) {
-        // Learning for the first time today
+      let newStreak = 1;
+      
+      if (!lastLearningDate) {
+        // First time learning - start streak at 1
+        newStreak = 1;
+        console.log('🎯 First time learning, streak = 1');
+      } else if (lastLearningDate === today) {
+        // Already learned today - don't increment
+        newStreak = currentProgress.currentStreak || 1;
+        console.log('📚 Already learned today, keeping streak:', newStreak);
+      } else {
+        // Check if yesterday
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toLocaleDateString('en-CA');
         
-        if (lastLearningDate === yesterday.toDateString()) {
-          // Consecutive day - increase streak
-          newStreak = currentProgress.currentStreak + 1;
-        } else if (lastLearningDate === null || lastLearningDate === today) {
-          // First ever learning or same day
-          newStreak = 1;
+        if (lastLearningDate === yesterdayStr) {
+          // Consecutive day - increment streak
+          newStreak = (currentProgress.currentStreak || 0) + 1;
+          console.log('🔥 Consecutive day! New streak:', newStreak);
         } else {
-          // Streak broken - reset to 1
+          // Missed days - streak was broken (was 0), starting fresh at 1
           newStreak = 1;
+          console.log('💔 Streak was broken (was 0), now starting fresh at 1');
         }
       }
-      
-      // Update weekly progress (mark today as completed)
+
+      // Update weekly progress
       const updatedWeeklyProgress = currentProgress.weeklyProgress.map(day => {
         if (day.isToday) {
           return { ...day, completed: true };
@@ -336,14 +467,13 @@ class DataManager {
       };
       
       await this.saveUserProgress(updatedProgress);
-      
-      // Also update the profile with latest counts
       await this.syncProfileWithProgress(updatedProgress);
       
-      console.log('✅ Progress updated for user:', { 
+      console.log('✅ Progress updated in Supabase:', { 
         userId, 
         wordsLearned: updatedProgress.wordsLearned, 
-        streak: updatedProgress.currentStreak 
+        streak: updatedProgress.currentStreak,
+        date: today
       });
       
       return updatedProgress;
@@ -353,17 +483,24 @@ class DataManager {
     }
   }
 
-  // Sync profile data with progress data
+  // Sync profile with progress (Supabase version)
   static async syncProfileWithProgress(progressData) {
     try {
-      const currentProfile = await this.getUserProfile();
-      const updatedProfile = {
-        ...currentProfile,
-        totalWords: progressData.wordsLearned,
-        streak: progressData.currentStreak,
-        isNewUser: false
-      };
-      await this.saveUserProfile(updatedProfile);
+      const userId = currentUserId;
+      
+      if (!userId) return false;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          total_words: progressData.wordsLearned,
+          current_streak: progressData.currentStreak,
+          is_new_user: false
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      
       return true;
     } catch (error) {
       console.error('❌ Error syncing profile with progress:', error);
@@ -371,17 +508,40 @@ class DataManager {
     }
   }
 
-  // Get user profile with user isolation
+  // Get user profile from Supabase
   static async getUserProfile() {
     try {
       const userId = currentUserId;
 
-      const profileKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROFILE);
-      const data = await SecureStore.getItemAsync(profileKey);
+      if (!userId) {
+        console.log('⚠️ No user ID, returning default profile');
+        return DEFAULT_PROFILE;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
       
       if (data) {
-        const profile = JSON.parse(data);
-        console.log('✅ Retrieved user profile:', { 
+        const profile = {
+          level: data.level || 'Beginner',
+          learningGoals: data.learning_goals || [],
+          joinDate: data.created_at,
+          username: data.username || 'User',
+          fullName: data.full_name || '',
+          email: data.email || '',
+          totalWords: data.total_words || 0,
+          streak: data.current_streak || 0,
+          isNewUser: data.is_new_user !== false
+        };
+        
+        console.log('✅ Retrieved user profile from Supabase:', { 
           userId, 
           fullName: profile.fullName, 
           level: profile.level, 
@@ -390,30 +550,42 @@ class DataManager {
         return profile;
       }
       
-      // No profile found - return fresh default
+      // No profile found - this shouldn't happen with triggers, but just in case
       console.log('⚠️ No profile found for user, returning default');
-      const freshProfile = {
-        ...DEFAULT_PROFILE,
-        joinDate: new Date().toISOString()
-      };
-      
-      // Save the fresh profile
-      await this.saveUserProfile(freshProfile);
-      return freshProfile;
+      return DEFAULT_PROFILE;
     } catch (error) {
       console.error('❌ Error getting user profile:', error);
       return DEFAULT_PROFILE;
     }
   }
 
-  // Save user profile with user isolation
+  // Save user profile to Supabase
   static async saveUserProfile(profileData) {
     try {
       const userId = currentUserId;
 
-      const profileKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROFILE);
-      await SecureStore.setItemAsync(profileKey, JSON.stringify(profileData));
-      console.log('✅ User profile saved:', { userId, level: profileData.level, fullName: profileData.fullName });
+      if (!userId) {
+        console.log('⚠️ No user ID, cannot save profile');
+        return false;
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          level: profileData.level,
+          learning_goals: profileData.learningGoals,
+          username: profileData.username,
+          full_name: profileData.fullName,
+          email: profileData.email,
+          total_words: profileData.totalWords,
+          current_streak: profileData.streak,
+          is_new_user: profileData.isNewUser
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      
+      console.log('✅ User profile saved to Supabase:', { userId, level: profileData.level, fullName: profileData.fullName });
       return true;
     } catch (error) {
       console.error('❌ Error saving user profile:', error);
@@ -421,7 +593,7 @@ class DataManager {
     }
   }
 
-  // Update user level from assessment
+  // Update user level (keeping your exact logic)
   static async updateUserLevel(level) {
     try {
       const currentProfile = await this.getUserProfile();
@@ -438,7 +610,7 @@ class DataManager {
     }
   }
 
-  // Update learning goals
+  // Update learning goals (keeping your exact logic)
   static async updateLearningGoals(goals) {
     try {
       const currentProfile = await this.getUserProfile();
@@ -455,7 +627,7 @@ class DataManager {
     }
   }
 
-  // Update user's full name
+  // Update user's full name (keeping your exact logic)
   static async updateUserFullName(fullName) {
     try {
       const currentProfile = await this.getUserProfile();
@@ -472,53 +644,67 @@ class DataManager {
     }
   }
 
-  // Handle user authentication change (called from AuthContext)
+  // Handle auth change (modified for Supabase with better error handling)
   static async handleAuthChange(userId, userInfo = null) {
     try {
       if (userId && userId !== 'guest_user') {
-        // User logged in - set current user and check if they need fresh data
         setCurrentUser(userId);
         
-        const profileKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROFILE);
-        const existingProfile = await SecureStore.getItemAsync(profileKey);
+        // Check if profile exists (trigger should have created it)
+        const profile = await this.getUserProfile();
         
-        if (!existingProfile) {
-          // New user - initialize fresh data
+        if (profile === DEFAULT_PROFILE || profile.isNewUser) {
+          // Initialize data if needed, but handle duplicates gracefully
           const fullName = userInfo?.fullName || userInfo?.name || '';
           const email = userInfo?.email || 'user@example.com';
           const username = userInfo?.username || email.split('@')[0];
           
-          await this.initializeUserData(userId, fullName, email, username);
-          console.log('✅ Fresh data created for new authenticated user');
+          try {
+            await this.initializeUserData(userId, fullName, email, username);
+            console.log('✅ Fresh data created for new authenticated user');
+          } catch (error) {
+            // If it's a duplicate key error, that's fine - data already exists
+            if (error.code === '23505') {
+              console.log('✅ User data already exists (created by trigger)');
+            } else {
+              throw error; // Re-throw other errors
+            }
+          }
         } else {
           console.log('✅ Existing user data found');
         }
       } else {
-        // User logged out or guest
-        setCurrentUser('guest_user');
+        setCurrentUser(null);
         console.log('✅ User logged out or guest mode');
       }
     } catch (error) {
+      // Don't throw errors that would break auth flow
       console.error('❌ Error handling auth change:', error);
+      
+      // Still set the user even if there are data errors
+      if (userId && userId !== 'guest_user') {
+        setCurrentUser(userId);
+        console.log('✅ User set despite data initialization error');
+      }
     }
   }
 
-  // Clear user data (for current user only)
+  // Clear user data (Supabase version)
   static async clearUserData() {
     try {
       const userId = currentUserId;
 
-      const profileKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROFILE);
-      const progressKey = getUserStorageKey(userId, STORAGE_KEYS.USER_PROGRESS);
-      const wordsKey = getUserStorageKey(userId, STORAGE_KEYS.LEARNED_WORDS);
+      if (!userId) {
+        console.log('⚠️ No user ID, cannot clear data');
+        return false;
+      }
+
+      // Delete from all tables (cascading delete should handle this)
+      const { error } = await supabase.auth.admin.deleteUser(userId);
       
-      await Promise.all([
-        SecureStore.deleteItemAsync(profileKey),
-        SecureStore.deleteItemAsync(progressKey),
-        SecureStore.deleteItemAsync(wordsKey)
-      ]);
+      if (error) throw error;
       
-      console.log('✅ User data cleared for:', userId);
+      console.log('✅ User data cleared from Supabase:', userId);
       return true;
     } catch (error) {
       console.error('❌ Error clearing user data:', error);
@@ -529,7 +715,6 @@ class DataManager {
   // Reset all data (for testing)
   static async resetAllData() {
     try {
-      // Clear current user's data
       await this.clearUserData();
       return true;
     } catch (error) {
@@ -538,7 +723,7 @@ class DataManager {
     }
   }
 
-  // Get user statistics
+  // Get user statistics (keeping your exact logic)
   static async getUserStats() {
     try {
       const profile = await this.getUserProfile();
@@ -552,7 +737,7 @@ class DataManager {
         fullName: profile.fullName || '',
         joinDate: profile.joinDate,
         lastLearningDate: progress.lastLearningDate,
-        recentWords: learnedWords.slice(0, 5) // Last 5 words learned
+        recentWords: learnedWords.slice(0, 5)
       };
     } catch (error) {
       console.error('❌ Error getting user stats:', error);
