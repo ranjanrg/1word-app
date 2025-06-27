@@ -2,6 +2,11 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { supabase } from '../supabase.config';
 import * as SecureStore from 'expo-secure-store';
 import DataManager from '../utils/DataManager';
+// 🆕 Add Google Sign-In import
+import { 
+  GoogleSignin,
+  statusCodes 
+} from '@react-native-google-signin/google-signin';
 
 // Helper function to convert Supabase errors to user-friendly messages
 const getErrorMessage = (error) => {
@@ -250,6 +255,18 @@ const AuthContext = createContext({
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
+  // 🆕 Configure Google Sign-In
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: '280064203476-5v7vflvcb7kpn6vqlvkj46oq0qia76uq.apps.googleusercontent.com',
+      androidClientId: '280064203476-bqprd4mbehs26pin1cevn7vv4sbpv4t2.apps.googleusercontent.com',
+      offlineAccess: true,
+      hostedDomain: '',
+      forceCodeForRefreshToken: true,
+    });
+    console.log('🔧 Google Sign-In configured');
+  }, []);
+
   // Initialize auth state and listen for auth changes
   useEffect(() => {
     let mounted = true;
@@ -343,7 +360,8 @@ export const AuthProvider = ({ children }) => {
             id: user.id,
             name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
             email: user.email || '',
-            joinDate: user.created_at
+            joinDate: user.created_at,
+            authMethod: user.app_metadata?.provider || 'email' // Track auth method
           };
         }
 
@@ -467,7 +485,8 @@ export const AuthProvider = ({ children }) => {
             id: data.user.id,
             name: name || 'User',
             email: email || '',
-            joinDate: data.user.created_at
+            joinDate: data.user.created_at,
+            authMethod: 'email'
           };
           
           // Save user data locally
@@ -546,10 +565,71 @@ export const AuthProvider = ({ children }) => {
       }
     },
 
+    // 🆕 Google Sign-In Function
+    signInWithGoogle: async () => {
+      try {
+        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: true });
+        
+        console.log('🔐 Starting Google sign in...');
+        
+        // Check if device supports Google Play Services
+        await GoogleSignin.hasPlayServices();
+        
+        // Sign in with Google
+        const userInfo = await GoogleSignin.signIn();
+        console.log('✅ Google sign-in successful!', userInfo.user.email);
+        
+        // Sign in to Supabase with Google token
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: userInfo.idToken,
+        });
+        
+        if (error) {
+          console.error('❌ Supabase Google auth error:', error);
+          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
+          return { success: false, error: 'Google sign-in failed. Please try again.' };
+        }
+        
+        if (data.user) {
+          console.log('✅ Supabase Google auth successful!');
+          // Auth state change listener will handle the state update
+          return { success: true };
+        } else {
+          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
+          return { success: false, error: 'Google sign-in failed. Please try again.' };
+        }
+        
+      } catch (error) {
+        console.error('❌ Google sign-in error:', error);
+        
+        let errorMessage = 'Google sign-in failed';
+        
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+          errorMessage = 'Sign-in was cancelled';
+        } else if (error.code === statusCodes.IN_PROGRESS) {
+          errorMessage = 'Sign-in is already in progress';
+        } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          errorMessage = 'Google Play Services not available';
+        }
+        
+        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
+        return { success: false, error: errorMessage };
+      }
+    },
+
     // Sign out user
     signOut: async () => {
       try {
         console.log('🚪 Signing out...');
+        
+        // Sign out from Google if user used Google
+        try {
+          await GoogleSignin.signOut();
+          console.log('✅ Google sign out successful');
+        } catch (googleError) {
+          console.log('ℹ️ No Google session to sign out from');
+        }
         
         const { error } = await supabase.auth.signOut();
         

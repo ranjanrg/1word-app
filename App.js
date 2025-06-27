@@ -25,7 +25,7 @@ const LoadingNavigator = () => (
   </Stack.Navigator>
 );
 
-// Auth Stack Component - FIXED: Proper screen order
+// Auth Stack Component
 const AuthStack = () => (
   <Stack.Navigator 
     initialRouteName="AuthWelcome"
@@ -44,7 +44,7 @@ const AuthStack = () => (
   </Stack.Navigator>
 );
 
-// Main App Stack Component - FIXED: Ensure MainScreen is properly registered
+// Main App Stack Component
 const MainStack = () => (
   <Stack.Navigator 
     initialRouteName="MainScreen"

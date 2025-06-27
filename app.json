@@ -29,6 +29,14 @@
       "favicon": "./assets/favicon.png"
     },
     "scheme": "oneword",
+    "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.280064203476-5v7vflvcb7kpn6vqlvkj46oq0qia76uq"
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "7548a62b-f422-485a-9650-d59a61c7297d"

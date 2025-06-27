@@ -17,24 +17,24 @@ export default function MainScreen({ navigation }) {
   const [showDailyCompleteModal, setShowDailyCompleteModal] = useState(false);
   const [timeUntilNext, setTimeUntilNext] = useState({ hours: 0, minutes: 0, seconds: 0 });
 
+  // Animation values
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [slideAnim] = useState(new Animated.Value(50));
+
   // Update timer every second when modal is visible
   useEffect(() => {
     let interval = null;
     
     if (showDailyCompleteModal) {
-      // Update immediately
       const updateTimer = () => {
         const timeUntil = DataManager.getTimeUntilNextWord();
         setTimeUntilNext(timeUntil);
       };
       
-      updateTimer(); // Initial update
-      
-      // Set interval to update every second
+      updateTimer();
       interval = setInterval(updateTimer, 1000);
     }
     
-    // Cleanup interval when modal closes
     return () => {
       if (interval) {
         clearInterval(interval);
@@ -42,22 +42,41 @@ export default function MainScreen({ navigation }) {
     };
   }, [showDailyCompleteModal]);
 
-  // Animation values
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [slideAnim] = useState(new Animated.Value(50));
-
   const handleLearnToday = async () => {
-    // Check daily limit before navigating
+    // Check daily limit before navigating (keep it simple - 1 word per day)
     const limitStatus = await DataManager.canLearnWordToday();
     
     if (!limitStatus.canLearn) {
-      // Don't set timeUntilNext here anymore - let the useEffect handle it
       setShowDailyCompleteModal(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
     
     navigation.navigate('LearnWord');
+  };
+
+  const handleWordLearned = async () => {
+    // Call this when user successfully learns a word
+    await incrementDailyUsage();
+    loadUserData(); // Refresh the UI
+  };
+
+  const handleUpgradePlan = async (planType) => {
+    try {
+      // In real app, integrate with Razorpay here
+      const result = await subscribeToPlan(planType);
+      
+      if (result.success) {
+        setShowUpgradeModal(false);
+        Alert.alert('Success!', `Successfully upgraded to ${planType} plan!`);
+        loadUserData();
+      } else {
+        Alert.alert('Error', 'Failed to upgrade plan. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error upgrading plan:', error);
+      Alert.alert('Error', 'An error occurred. Please try again.');
+    }
   };
 
   const handleSettings = () => {
@@ -106,12 +125,6 @@ export default function MainScreen({ navigation }) {
       loadUserData();
     }, [])
   );
-  
-  const refreshData = async () => {
-    console.log('🔄 Manually refreshing data...');
-    setLoading(true);
-    await loadUserData();
-  };
 
   if (loading) {
     return (
@@ -129,10 +142,7 @@ export default function MainScreen({ navigation }) {
       <StatusBar style="light" />
       
       {/* Enhanced Header with Gradient */}
-      <LinearGradient
-        colors={['#000', '#2d3436']}
-        style={styles.headerGradient}
-      >
+      <LinearGradient colors={['#000', '#2d3436']} style={styles.headerGradient}>
         <View style={styles.header}>
           <View style={styles.logoSection}>
             <Text style={styles.logoIcon}>📚</Text>
@@ -150,15 +160,7 @@ export default function MainScreen({ navigation }) {
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {/* Enhanced Stats Cards */}
-        <Animated.View 
-          style={[
-            styles.statsContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
+        <Animated.View style={[styles.statsContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>{wordsLearned}</Text>
@@ -179,20 +181,9 @@ export default function MainScreen({ navigation }) {
         </Animated.View>
 
         {/* Enhanced Hero CTA */}
-        <Animated.View 
-          style={[
-            styles.heroSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
+        <Animated.View style={[styles.heroSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <TouchableOpacity style={styles.heroButton} onPress={handleLearnToday}>
-            <LinearGradient
-              colors={['#000', '#2d3436', '#636e72']}
-              style={styles.heroGradient}
-            >
+            <LinearGradient colors={['#000', '#2d3436', '#636e72']} style={styles.heroGradient}>
               <View style={styles.heroButtonContent}>
                 <View style={styles.heroLeft}>
                   <View style={styles.heroIconContainer}>
@@ -216,24 +207,14 @@ export default function MainScreen({ navigation }) {
                   </Text>
                 </View>
               </View>
-              
-              {/* Floating elements */}
               <View style={styles.floatingDot1} />
               <View style={styles.floatingDot2} />
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Enhanced Recent Words */}
-        <Animated.View 
-          style={[
-            styles.recentSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
+        {/* Recent Words Section */}
+        <Animated.View style={[styles.recentSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recently Learned</Text>
             {recentWords.length > 3 && (
@@ -275,11 +256,10 @@ export default function MainScreen({ navigation }) {
           )}
         </Animated.View>
 
-        {/* Bottom Spacing */}
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Enhanced Bottom Navigation */}
+      {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={[styles.navItem, styles.activeNavItem]}>
           <View style={styles.navIconContainer}>
@@ -295,7 +275,7 @@ export default function MainScreen({ navigation }) {
           <Text style={styles.navLabel}>Learn</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navItem} onPress={handleSettings}>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Settings')}>
           <View style={styles.navIconContainer}>
             <Text style={styles.navIcon}>⚙️</Text>
           </View>
@@ -310,89 +290,86 @@ export default function MainScreen({ navigation }) {
         animationType="fade"
         onRequestClose={() => setShowDailyCompleteModal(false)}
       >
-        <View style={dailyCompleteModalStyles.overlay}>
+        <View style={modalStyles.overlay}>
           <Animated.View 
             style={[
-              dailyCompleteModalStyles.container,
+              modalStyles.container,
               {
                 opacity: fadeAnim,
                 transform: [{ scale: slideAnim.interpolate({ inputRange: [0, 50], outputRange: [1, 0.8] }) }],
               },
             ]}
           >
-            <LinearGradient
-              colors={['#000', '#2d3436']}
-              style={dailyCompleteModalStyles.gradient}
-            >
+            <LinearGradient colors={['#000', '#2d3436']} style={modalStyles.gradient}>
               {/* Success Icon */}
-              <View style={dailyCompleteModalStyles.iconContainer}>
-                <Text style={dailyCompleteModalStyles.successIcon}>🎯</Text>
+              <View style={modalStyles.iconContainer}>
+                <Text style={modalStyles.successIcon}>🎯</Text>
               </View>
               
               {/* Title */}
-              <Text style={dailyCompleteModalStyles.title}>
+              <Text style={modalStyles.title}>
                 Daily Goal Complete!
               </Text>
               
               {/* Message */}
-              <Text style={dailyCompleteModalStyles.message}>
+              <Text style={modalStyles.message}>
                 You've already learned your word for today!
               </Text>
               
               {/* Countdown */}
-              <View style={dailyCompleteModalStyles.countdownContainer}>
-                <Text style={dailyCompleteModalStyles.countdownLabel}>
+              <View style={modalStyles.countdownContainer}>
+                <Text style={modalStyles.countdownLabel}>
                   Next word available in:
                 </Text>
-                <View style={dailyCompleteModalStyles.timeContainer}>
-                  <View style={dailyCompleteModalStyles.timeBox}>
-                    <Text style={dailyCompleteModalStyles.timeNumber}>
+                <View style={modalStyles.timeContainer}>
+                  <View style={modalStyles.timeBox}>
+                    <Text style={modalStyles.timeNumber}>
                       {timeUntilNext.hours}
                     </Text>
-                    <Text style={dailyCompleteModalStyles.timeUnit}>hours</Text>
+                    <Text style={modalStyles.timeUnit}>hours</Text>
                   </View>
-                  <Text style={dailyCompleteModalStyles.timeSeparator}>:</Text>
-                  <View style={dailyCompleteModalStyles.timeBox}>
-                    <Text style={dailyCompleteModalStyles.timeNumber}>
+                  <Text style={modalStyles.timeSeparator}>:</Text>
+                  <View style={modalStyles.timeBox}>
+                    <Text style={modalStyles.timeNumber}>
                       {timeUntilNext.minutes}
                     </Text>
-                    <Text style={dailyCompleteModalStyles.timeUnit}>mins</Text>
+                    <Text style={modalStyles.timeUnit}>mins</Text>
                   </View>
-                  <Text style={dailyCompleteModalStyles.timeSeparator}>:</Text>
-                  <View style={dailyCompleteModalStyles.timeBox}>
-                    <Text style={dailyCompleteModalStyles.timeNumber}>
+                  <Text style={modalStyles.timeSeparator}>:</Text>
+                  <View style={modalStyles.timeBox}>
+                    <Text style={modalStyles.timeNumber}>
                       {timeUntilNext.seconds}
                     </Text>
-                    <Text style={dailyCompleteModalStyles.timeUnit}>secs</Text>
+                    <Text style={modalStyles.timeUnit}>secs</Text>
                   </View>
                 </View>
               </View>
               
               {/* Encouragement */}
-              <Text style={dailyCompleteModalStyles.encouragement}>
+              <Text style={modalStyles.encouragement}>
                 Great job on maintaining your learning streak! 🔥
               </Text>
               
               {/* Action Button */}
-              <View style={dailyCompleteModalStyles.buttonWrapper}>
+              <View style={modalStyles.buttonWrapper}>
                 <TouchableOpacity 
-                  style={dailyCompleteModalStyles.primaryButton}
+                  style={modalStyles.primaryButton}
                   onPress={() => {
                     setShowDailyCompleteModal(false);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={dailyCompleteModalStyles.primaryButtonText}>
+                  <Text style={modalStyles.primaryButtonText}>
                     Got it! ✨
                   </Text>
                 </TouchableOpacity>
               </View>
               
               {/* Floating Dots */}
-              <View style={dailyCompleteModalStyles.floatingDot1} />
-              <View style={dailyCompleteModalStyles.floatingDot2} />
-              <View style={dailyCompleteModalStyles.floatingDot3} />
+              <View style={modalStyles.floatingDot1} />
+              <View style={modalStyles.floatingDot2} />
+              <View style={modalStyles.floatingDot3} />
             </LinearGradient>
           </Animated.View>
         </View>
@@ -401,6 +378,7 @@ export default function MainScreen({ navigation }) {
   );
 }
 
+// Keep all your existing styles, just add these new ones
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -454,6 +432,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     letterSpacing: 0.5,
+  },
+  // New subscription plan badge
+  planBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  planText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginRight: 4,
+  },
+  daysText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
   },
   streakBadge: {
     flexDirection: 'row',
@@ -775,8 +775,7 @@ const styles = StyleSheet.create({
   },
 });
 
-// Daily Goal Complete Modal Styles
-const dailyCompleteModalStyles = StyleSheet.create({
+const modalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -868,9 +867,8 @@ const dailyCompleteModalStyles = StyleSheet.create({
     marginBottom: 32,
     fontWeight: '500',
   },
-  buttonContainer: {
+  buttonWrapper: {
     width: '100%',
-    gap: 12,
   },
   primaryButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -892,19 +890,6 @@ const dailyCompleteModalStyles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     letterSpacing: 0.5,
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  secondaryButtonText: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   // Floating animation dots
   floatingDot1: {
