@@ -205,6 +205,7 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  // ✅ FIXED: Removed manual navigation - AuthContext handles this automatically
   const handleSignOut = async () => {
     Alert.alert(
       'Sign Out',
@@ -224,8 +225,8 @@ const SettingsScreen = ({ navigation }) => {
               const result = await signOut();
               if (result.success) {
                 console.log('✅ Sign out successful');
-                // Navigate back or to login screen
-                navigation.navigate('AuthWelcome');
+                // ✅ REMOVED: navigation.navigate('AuthWelcome');
+                // AuthContext will automatically handle navigation when sign out is detected
               } else {
                 console.error('❌ Sign out failed:', result.error);
                 Alert.alert('Error', 'Failed to sign out. Please try again.');

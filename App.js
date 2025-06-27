@@ -8,13 +8,10 @@ import SplashScreen from './screens/SplashScreen';
 import AuthWelcomeScreen from './screens/AuthWelcomeScreen';
 import AssessmentScreen from './screens/AssessmentScreen';
 import LoginScreen from './screens/LoginScreen';
-import SignupScreen from './screens/SignupScreen';
-import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import LearningGoalsScreen from './screens/LearningGoalsScreen';
 import MainScreen from './screens/MainScreen';
 import LearnWordScreen from './screens/LearnWordScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import OnboardingScreen from './screens/OnboardingScreen';
 
 const Stack = createStackNavigator();
 
@@ -37,10 +34,7 @@ const AuthStack = () => (
     <Stack.Screen name="AuthWelcome" component={AuthWelcomeScreen} />
     <Stack.Screen name="Assessment" component={AssessmentScreen} />
     <Stack.Screen name="LearningGoals" component={LearningGoalsScreen} />
-    <Stack.Screen name="Signup" component={SignupScreen} />
     <Stack.Screen name="Login" component={LoginScreen} />
-    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-    <Stack.Screen name="Onboarding" component={OnboardingScreen} />
   </Stack.Navigator>
 );
 

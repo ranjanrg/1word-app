@@ -2,65 +2,19 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { supabase } from '../supabase.config';
 import * as SecureStore from 'expo-secure-store';
 import DataManager from '../utils/DataManager';
-// 🆕 Add Google Sign-In import
-import { 
-  GoogleSignin,
-  statusCodes 
-} from '@react-native-google-signin/google-signin';
 
-// Helper function to convert Supabase errors to user-friendly messages
-const getErrorMessage = (error) => {
-  console.log('🐛 Raw Supabase error:', error);
-  
-  // Handle specific Supabase error codes
-  if (error?.message) {
-    const message = error.message.toLowerCase();
-    
-    // Invalid password
-    if (message.includes('invalid login credentials') || 
-        message.includes('email not confirmed') ||
-        message.includes('invalid credentials')) {
-      return 'Invalid email or password. Please check your credentials.';
-    }
-    
-    // User not found / wrong email
-    if (message.includes('user not found') || 
-        message.includes('invalid email')) {
-      return 'No account found with this email address.';
-    }
-    
-    // Account already exists during signup
-    if (message.includes('user already registered') ||
-        message.includes('email already in use') ||
-        message.includes('already registered')) {
-      return 'An account with this email already exists. Try signing in instead.';
-    }
-    
-    // Weak password
-    if (message.includes('password') && message.includes('weak')) {
-      return 'Password is too weak. Please use at least 6 characters.';
-    }
-    
-    // Invalid email format
-    if (message.includes('invalid email format') ||
-        message.includes('email is invalid')) {
-      return 'Please enter a valid email address.';
-    }
-    
-    // Rate limiting
-    if (message.includes('rate limit') || message.includes('too many')) {
-      return 'Too many attempts. Please wait a moment before trying again.';
-    }
-    
-    // Network errors
-    if (message.includes('network') || message.includes('connection')) {
-      return 'Network error. Please check your internet connection.';
-    }
-  }
-  
-  // Fallback to original message or generic error
-  return error?.message || 'Something went wrong. Please try again.';
-};
+// 🆕 Conditional Google Sign-In import (only for development builds)
+let GoogleSignin = null;
+let statusCodes = null;
+
+try {
+  const googleSignInModule = require('@react-native-google-signin/google-signin');
+  GoogleSignin = googleSignInModule.GoogleSignin;
+  statusCodes = googleSignInModule.statusCodes;
+  console.log('✅ Google Sign-In module loaded');
+} catch (error) {
+  console.log('⚠️ Google Sign-In not available (Expo Go environment)');
+}
 
 // Storage keys
 const AUTH_STORAGE_KEYS = {
@@ -74,13 +28,12 @@ const AUTH_ACTIONS = {
   RESTORE_SESSION: 'RESTORE_SESSION',
   SIGN_IN: 'SIGN_IN',
   SIGN_OUT: 'SIGN_OUT',
-  SIGN_UP: 'SIGN_UP',
   SET_GUEST: 'SET_GUEST',
   UPDATE_USER: 'UPDATE_USER',
   SET_LOADING: 'SET_LOADING'
 };
 
-// Initial state - FIXED: All properties properly initialized
+// Initial state
 const initialState = {
   isLoading: true,
   isSignedIn: false,
@@ -91,7 +44,7 @@ const initialState = {
   isFirstTime: true
 };
 
-// Auth reducer - FIXED: Ensures all state properties are always defined
+// Auth reducer
 const authReducer = (prevState, action) => {
   switch (action.type) {
     case AUTH_ACTIONS.RESTORE_SESSION:
@@ -114,17 +67,6 @@ const authReducer = (prevState, action) => {
         user: action.user || null,
         userData: action.userData || null,
         userLevel: action.userLevel || prevState.userLevel,
-        isLoading: false,
-      };
-    
-    case AUTH_ACTIONS.SIGN_UP:
-      return {
-        ...prevState,
-        isSignedIn: true,
-        isGuest: false,
-        user: action.user || null,
-        userData: action.userData || null,
-        userLevel: action.userLevel || 'Beginner',
         isFirstTime: false,
         isLoading: false,
       };
@@ -172,7 +114,7 @@ const authReducer = (prevState, action) => {
   }
 };
 
-// Storage helpers - FIXED: Better error handling
+// Storage helpers
 const storage = {
   getItem: async (key) => {
     try {
@@ -206,38 +148,10 @@ const storage = {
       console.error(`Error removing ${key} from storage:`, error);
       return false;
     }
-  },
-
-  // Enhanced method to clear all auth-related storage
-  clearAllAuthStorage: async () => {
-    try {
-      const keysToRemove = [
-        AUTH_STORAGE_KEYS.USER_PROFILE,
-        AUTH_STORAGE_KEYS.USER_LEVEL,
-        AUTH_STORAGE_KEYS.IS_FIRST_TIME,
-        'supabase.auth.token',
-        'auth_token',
-        'user_session',
-        'user_preferences'
-      ];
-
-      const removePromises = keysToRemove.map(key => 
-        SecureStore.deleteItemAsync(key).catch(error => 
-          console.log(`Could not remove ${key}:`, error.message)
-        )
-      );
-
-      await Promise.allSettled(removePromises);
-      console.log('✅ All auth storage cleared');
-      return true;
-    } catch (error) {
-      console.error('❌ Error clearing auth storage:', error);
-      return false;
-    }
   }
 };
 
-// Create Auth Context with default values
+// Create Auth Context
 const AuthContext = createContext({
   isLoading: true,
   isSignedIn: false,
@@ -251,21 +165,52 @@ const AuthContext = createContext({
   userEmail: null
 });
 
-// Auth Provider Component - FIXED: Better state management + DataManager integration
+// Auth Provider Component
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // 🆕 Configure Google Sign-In
+  // Configure Google Sign-In
   useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: '280064203476-5v7vflvcb7kpn6vqlvkj46oq0qia76uq.apps.googleusercontent.com',
-      androidClientId: '280064203476-bqprd4mbehs26pin1cevn7vv4sbpv4t2.apps.googleusercontent.com',
-      offlineAccess: true,
-      hostedDomain: '',
-      forceCodeForRefreshToken: true,
-    });
-    console.log('🔧 Google Sign-In configured');
+    if (GoogleSignin) {
+      GoogleSignin.configure({
+        webClientId: '280064203476-5v7vflvcb7kpn6vqlvkj46oq0qia76uq.apps.googleusercontent.com',
+        offlineAccess: true,
+        hostedDomain: '',
+        forceCodeForRefreshToken: true,
+      });
+      console.log('🔧 Google Sign-In configured');
+    }
   }, []);
+
+  // Apply pending assessment data after Google Sign-In
+  const applyPendingAssessmentData = async (userData) => {
+    try {
+      const pendingData = await storage.getItem('pendingAssessmentData');
+      if (pendingData) {
+        const assessmentData = JSON.parse(pendingData);
+        console.log('📊 Applying pending assessment data:', assessmentData);
+        
+        // Save assessment data to storage
+        await storage.setItem(AUTH_STORAGE_KEYS.USER_LEVEL, assessmentData.userLevel);
+        await storage.setItem('familiarWords', JSON.stringify(assessmentData.selectedWords));
+        await storage.setItem('learningGoals', JSON.stringify(assessmentData.learningGoals));
+        
+        // Clear pending data
+        await storage.removeItem('pendingAssessmentData');
+        
+        console.log('✅ Assessment data applied successfully');
+        return {
+          ...userData,
+          userLevel: assessmentData.userLevel,
+          assessmentCompleted: true
+        };
+      }
+      return userData;
+    } catch (error) {
+      console.error('❌ Error applying assessment data:', error);
+      return userData;
+    }
+  };
 
   // Initialize auth state and listen for auth changes
   useEffect(() => {
@@ -289,10 +234,8 @@ export const AuthProvider = ({ children }) => {
             await handleUserSession(session.user);
           } else {
             console.log('ℹ️ No existing session found');
-            // Tell DataManager we're in guest mode
             DataManager.handleAuthChange('guest_user');
             
-            // Check if user has been here before
             const isFirstTime = await storage.getItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME);
             
             dispatch({
@@ -308,9 +251,7 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         console.error('❌ Error in getInitialSession:', error);
         if (mounted) {
-          // Tell DataManager we're in guest mode
           DataManager.handleAuthChange('guest_user');
-          
           dispatch({
             type: AUTH_ACTIONS.RESTORE_SESSION,
             user: null,
@@ -323,7 +264,7 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Handle user session data - FIXED: Better null handling + DataManager integration
+    // Handle user session data
     const handleUserSession = async (user) => {
       try {
         if (!user) {
@@ -333,7 +274,7 @@ export const AuthProvider = ({ children }) => {
 
         console.log('🔄 Handling user session for:', user.email);
 
-        // Tell DataManager about the current user FIRST
+        // Tell DataManager about the current user
         await DataManager.handleAuthChange(user.id, {
           fullName: user.user_metadata?.name || '',
           email: user.email,
@@ -345,7 +286,7 @@ export const AuthProvider = ({ children }) => {
         const storedLevel = await storage.getItem(AUTH_STORAGE_KEYS.USER_LEVEL);
         const isFirstTime = await storage.getItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME);
         
-        // Create user data object with proper fallbacks
+        // Create user data object
         let userData = null;
         try {
           userData = storedProfile ? JSON.parse(storedProfile) : null;
@@ -361,7 +302,7 @@ export const AuthProvider = ({ children }) => {
             name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
             email: user.email || '',
             joinDate: user.created_at,
-            authMethod: user.app_metadata?.provider || 'email' // Track auth method
+            authMethod: user.app_metadata?.provider || 'google'
           };
         }
 
@@ -378,7 +319,6 @@ export const AuthProvider = ({ children }) => {
         
       } catch (error) {
         console.error('❌ Error handling user session:', error);
-        // Even on error, make sure we have a valid state
         dispatch({
           type: AUTH_ACTIONS.RESTORE_SESSION,
           user: user,
@@ -390,7 +330,7 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Listen for auth changes - FIXED: Better subscription handling + DataManager integration
+    // Listen for auth changes
     const setupAuthListener = () => {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('🔔 Auth state changed:', event);
@@ -402,13 +342,11 @@ export const AuthProvider = ({ children }) => {
             console.log('✅ User signed in:', session.user.email);
             await handleUserSession(session.user);
           } else if (event === 'SIGNED_OUT') {
-            console.log('✅ User signed out');
-            // Tell DataManager user logged out
+            console.log('✅ User logged out or guest mode');
             DataManager.handleAuthChange('guest_user');
             dispatch({ type: AUTH_ACTIONS.SIGN_OUT });
           } else if (event === 'TOKEN_REFRESHED' && session) {
             console.log('🔄 Token refreshed');
-            // No need to reinitialize, just update session
           }
         } catch (error) {
           console.error('❌ Error in auth state change:', error);
@@ -436,153 +374,27 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // Auth actions - FIXED: Better error handling and state management + DataManager integration
-  const authActions = {
-    // Sign up user with Supabase
-    signUp: async (name, email, password, userLevel = 'Beginner') => {
-      try {
-        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: true });
-        
-        console.log('🚀 Starting Supabase signup...');
-        console.log('📧 Email:', email);
-        console.log('👤 Name:', name);
-        console.log('🎯 Level:', userLevel);
-        
-        // Sign up with Supabase
-        const { data, error } = await supabase.auth.signUp({
-          email: email,
-          password: password,
-          options: {
-            data: {
-              name: name,
-              user_level: userLevel
-            }
-          }
-        });
-        
-        if (error) {
-          console.error('❌ Supabase signup error:', error);
-          const userFriendlyError = getErrorMessage(error);
-          console.log('📝 User-friendly error:', userFriendlyError);
-          
-          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-          return { success: false, error: userFriendlyError };
-        }
-        
-        if (data.user) {
-          console.log('✅ Supabase signup successful!');
-          console.log('👤 User ID:', data.user.id);
-          
-          // Tell DataManager about the new user IMMEDIATELY
-          await DataManager.handleAuthChange(data.user.id, {
-            fullName: name || '',
-            email: email,
-            username: name || email.split('@')[0]
-          });
-          
-          // Create user profile data
-          const userData = {
-            id: data.user.id,
-            name: name || 'User',
-            email: email || '',
-            joinDate: data.user.created_at,
-            authMethod: 'email'
-          };
-          
-          // Save user data locally
-          await storage.setItem(AUTH_STORAGE_KEYS.USER_PROFILE, JSON.stringify(userData));
-          await storage.setItem(AUTH_STORAGE_KEYS.USER_LEVEL, userLevel);
-          await storage.setItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME, 'false');
-          
-          // Update state
-          dispatch({
-            type: AUTH_ACTIONS.SIGN_UP,
-            user: data.user,
-            userData: userData,
-            userLevel: userLevel
-          });
-          
-          console.log('✅ New user fully initialized with fresh data');
-          return { success: true };
-          
-        } else {
-          console.log('⚠️ Signup successful but no user data returned');
-          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-          return { success: false, error: 'Account creation failed. Please try again.' };
-        }
-        
-      } catch (error) {
-        console.error('❌ Signup exception:', error);
-        const userFriendlyError = getErrorMessage(error);
-        
-        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-        return { success: false, error: userFriendlyError };
-      }
-    },
-
-    // Sign in user with Supabase
-    signIn: async (email, password) => {
-      try {
-        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: true });
-        
-        console.log('🔐 Starting Supabase sign in...');
-        console.log('📧 Email:', email);
-        
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email,
-          password: password,
-        });
-        
-        if (error) {
-          console.error('❌ Supabase sign in error:', error);
-          const userFriendlyError = getErrorMessage(error);
-          console.log('📝 User-friendly error:', userFriendlyError);
-          
-          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-          return { success: false, error: userFriendlyError };
-        }
-        
-        if (data.user) {
-          console.log('✅ Supabase sign in successful!');
-          console.log('👤 User ID:', data.user.id);
-          
-          // Auth state change listener will handle the state update and DataManager
-          // Just return success
-          return { success: true };
-          
-        } else {
-          console.log('⚠️ Sign in successful but no user data returned');
-          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-          return { success: false, error: 'Sign in failed. Please try again.' };
-        }
-        
-      } catch (error) {
-        console.error('❌ Sign in exception:', error);
-        const userFriendlyError = getErrorMessage(error);
-        
-        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-        return { success: false, error: userFriendlyError };
-      }
-    },
-
-    // 🆕 Google Sign-In Function
-    signInWithGoogle: async () => {
-      try {
-        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: true });
-        
-        console.log('🔐 Starting Google sign in...');
+  // Google Sign-In Function
+  const signInWithGoogle = async () => {
+    try {
+      dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: true });
+      
+      // Check if real Google Sign-In is available
+      if (GoogleSignin && statusCodes) {
+        console.log('🔐 Starting real Google sign in...');
         
         // Check if device supports Google Play Services
         await GoogleSignin.hasPlayServices();
         
         // Sign in with Google
         const userInfo = await GoogleSignin.signIn();
-        console.log('✅ Google sign-in successful!', userInfo.user.email);
+        console.log('✅ Google sign-in successful!', userInfo);
+        console.log('📧 User email:', userInfo?.user?.email || userInfo?.data?.user?.email);
         
         // Sign in to Supabase with Google token
         const { data, error } = await supabase.auth.signInWithIdToken({
           provider: 'google',
-          token: userInfo.idToken,
+          token: userInfo.idToken || userInfo.data?.idToken,
         });
         
         if (error) {
@@ -593,111 +405,167 @@ export const AuthProvider = ({ children }) => {
         
         if (data.user) {
           console.log('✅ Supabase Google auth successful!');
-          // Auth state change listener will handle the state update
           return { success: true };
         } else {
           dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
           return { success: false, error: 'Google sign-in failed. Please try again.' };
         }
+      } else {
+        // Fallback to mock Google Sign-In for Expo Go
+        console.log('🧪 Using mock Google sign-in (Expo Go)...');
         
-      } catch (error) {
-        console.error('❌ Google sign-in error:', error);
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        let errorMessage = 'Google sign-in failed';
+        // Mock user data
+        const mockGoogleUser = {
+          id: 'mock-' + 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          }),
+          email: 'testuser@gmail.com',
+          user_metadata: {
+            name: 'Test User',
+            picture: 'https://example.com/avatar.jpg'
+          },
+          created_at: new Date().toISOString(),
+          app_metadata: {
+            provider: 'google'
+          }
+        };
         
-        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-          errorMessage = 'Sign-in was cancelled';
-        } else if (error.code === statusCodes.IN_PROGRESS) {
-          errorMessage = 'Sign-in is already in progress';
-        } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-          errorMessage = 'Google Play Services not available';
-        }
+        // Tell DataManager about the mock user
+        await DataManager.handleAuthChange(mockGoogleUser.id, {
+          fullName: mockGoogleUser.user_metadata.name,
+          email: mockGoogleUser.email,
+          username: mockGoogleUser.email.split('@')[0]
+        });
         
-        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-        return { success: false, error: errorMessage };
-      }
-    },
+        // Create mock user data
+        const userData = {
+          id: mockGoogleUser.id,
+          name: mockGoogleUser.user_metadata.name,
+          email: mockGoogleUser.email,
+          joinDate: mockGoogleUser.created_at,
+          authMethod: 'google_mock'
+        };
 
-    // Sign out user
-    signOut: async () => {
-      try {
-        console.log('🚪 Signing out...');
+        // Apply any pending assessment data
+        const updatedUserData = await applyPendingAssessmentData(userData);
         
-        // Sign out from Google if user used Google
+        // Save user data locally
+        await storage.setItem(AUTH_STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedUserData));
+        await storage.setItem(AUTH_STORAGE_KEYS.USER_LEVEL, updatedUserData.userLevel || 'Beginner');
+        await storage.setItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME, 'false');
+        
+        dispatch({
+          type: AUTH_ACTIONS.SIGN_IN,
+          user: mockGoogleUser,
+          userData: updatedUserData,
+          userLevel: updatedUserData.userLevel || 'Beginner'
+        });
+        
+        console.log('✅ Mock Google sign-in successful!');
+        return { success: true };
+      }
+      
+    } catch (error) {
+      console.error('❌ Google sign-in error:', error);
+      
+      let errorMessage = 'Google sign-in failed';
+      
+      if (statusCodes && error.code === statusCodes.SIGN_IN_CANCELLED) {
+        errorMessage = 'Sign-in was cancelled';
+      } else if (statusCodes && error.code === statusCodes.IN_PROGRESS) {
+        errorMessage = 'Sign-in is already in progress';
+      } else if (statusCodes && error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        errorMessage = 'Google Play Services not available';
+      }
+      
+      dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  // Sign out user
+  const signOut = async () => {
+    try {
+      console.log('🚪 Signing out...');
+      
+      // Sign out from Google if available
+      if (GoogleSignin) {
         try {
           await GoogleSignin.signOut();
           console.log('✅ Google sign out successful');
         } catch (googleError) {
           console.log('ℹ️ No Google session to sign out from');
         }
-        
-        const { error } = await supabase.auth.signOut();
-        
-        if (error) {
-          console.error('❌ Sign out error:', error);
-          return { success: false, error: error.message };
-        }
-        
-        // Clear local storage
-        await storage.removeItem(AUTH_STORAGE_KEYS.USER_PROFILE);
-        await storage.removeItem(AUTH_STORAGE_KEYS.USER_LEVEL);
-        
-        // DataManager will be notified via auth state change listener
-        
-        console.log('✅ Sign out successful');
-        return { success: true };
-        
-      } catch (error) {
-        console.error('❌ Sign out exception:', error);
+      }
+      
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('❌ Sign out error:', error);
         return { success: false, error: error.message };
       }
-    },
-
-    // Set guest mode
-    setGuest: async () => {
-      try {
-        console.log('👤 Setting guest mode');
-        
-        // Tell DataManager we're in guest mode
-        DataManager.handleAuthChange('guest_user');
-        
-        await storage.setItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME, 'false');
-        dispatch({ type: AUTH_ACTIONS.SET_GUEST });
-        return { success: true };
-      } catch (error) {
-        console.error('Error setting guest mode:', error);
-        return { success: false, error: error.message };
-      }
-    },
-
-    // Update user data
-    updateUser: async (newUserData, newUserLevel) => {
-      try {
-        const updatedUserData = { 
-          ...(state.userData || {}), 
-          ...(newUserData || {}) 
-        };
-        
-        await storage.setItem(AUTH_STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedUserData));
-        if (newUserLevel) {
-          await storage.setItem(AUTH_STORAGE_KEYS.USER_LEVEL, newUserLevel);
-        }
-        
-        dispatch({
-          type: AUTH_ACTIONS.UPDATE_USER,
-          userData: newUserData,
-          userLevel: newUserLevel
-        });
-        
-        return { success: true };
-      } catch (error) {
-        console.error('Error updating user:', error);
-        return { success: false, error: error.message };
-      }
+      
+      // Clear local storage
+      await storage.removeItem(AUTH_STORAGE_KEYS.USER_PROFILE);
+      await storage.removeItem(AUTH_STORAGE_KEYS.USER_LEVEL);
+      
+      console.log('✅ Sign out successful');
+      return { success: true };
+      
+    } catch (error) {
+      console.error('❌ Sign out exception:', error);
+      return { success: false, error: error.message };
     }
   };
 
-  // Context value - FIXED: Ensure all values are properly defined
+  // Set guest mode
+  const setGuest = async () => {
+    try {
+      console.log('👤 DataManager: Current user set to: null');
+      console.log('✅ User logged out or guest mode');
+      
+      DataManager.handleAuthChange('guest_user');
+      
+      await storage.setItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME, 'false');
+      dispatch({ type: AUTH_ACTIONS.SET_GUEST });
+      return { success: true };
+    } catch (error) {
+      console.error('Error setting guest mode:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Update user data
+  const updateUser = async (newUserData, newUserLevel) => {
+    try {
+      const updatedUserData = { 
+        ...(state.userData || {}), 
+        ...(newUserData || {}) 
+      };
+      
+      await storage.setItem(AUTH_STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedUserData));
+      if (newUserLevel) {
+        await storage.setItem(AUTH_STORAGE_KEYS.USER_LEVEL, newUserLevel);
+      }
+      
+      dispatch({
+        type: AUTH_ACTIONS.UPDATE_USER,
+        userData: newUserData,
+        userLevel: newUserLevel
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating user:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Context value
   const contextValue = {
     // State
     isLoading: state.isLoading,
@@ -708,8 +576,11 @@ export const AuthProvider = ({ children }) => {
     userLevel: state.userLevel,
     isFirstTime: state.isFirstTime,
     
-    // Actions
-    ...authActions,
+    // Actions (Google-only)
+    signInWithGoogle,
+    signOut,
+    setGuest,
+    updateUser,
     
     // Computed values
     isAuthenticated: state.isSignedIn || state.isGuest,

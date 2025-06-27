@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Anima
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as SecureStore from 'expo-secure-store';
 
 const { width } = Dimensions.get('window');
 
@@ -94,27 +95,38 @@ export default function LearningGoalsScreen({ navigation, route }) {
     }
   };
 
-  const handleNext = () => {
-    console.log("Selected Goals:", selectedGoals);
-    console.log("Assessment Data:", { userLevel, score, correctAnswers, percentile });
-    
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
-    // Navigate to Signup with both assessment and goals data
-    navigation.navigate('Signup', {
-      userLevel,
-      score,
-      totalWords,
-      correctAnswers,
-      percentile,
-      selectedWords,
-      learningGoals: selectedGoals
-    });
+  const saveGoalsData = async () => {
+    try {
+      // Save the assessment and goals data for later use after Google Sign-In
+      const assessmentData = {
+        userLevel,
+        score,
+        totalWords,
+        correctAnswers,
+        percentile,
+        selectedWords,
+        learningGoals: selectedGoals
+      };
+      
+      await SecureStore.setItemAsync('pendingAssessmentData', JSON.stringify(assessmentData));
+      console.log("Selected Goals:", selectedGoals);
+      console.log("Assessment Data:", assessmentData);
+    } catch (error) {
+      console.error('Error saving goals data:', error);
+    }
   };
 
-  const handleSkip = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('Signup', {
+  const handleNext = async () => {
+    await saveGoalsData();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Navigate to Google Login instead of Signup
+    navigation.navigate('Login');
+  };
+
+  const handleSkip = async () => {
+    // Save data even when skipping (with empty goals)
+    const assessmentDataWithEmptyGoals = {
       userLevel,
       score,
       totalWords,
@@ -122,7 +134,18 @@ export default function LearningGoalsScreen({ navigation, route }) {
       percentile,
       selectedWords,
       learningGoals: []
-    });
+    };
+    
+    try {
+      await SecureStore.setItemAsync('pendingAssessmentData', JSON.stringify(assessmentDataWithEmptyGoals));
+    } catch (error) {
+      console.error('Error saving assessment data:', error);
+    }
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // Navigate to Google Login
+    navigation.navigate('Login');
   };
 
   const getLevelEmoji = () => {
@@ -243,7 +266,7 @@ export default function LearningGoalsScreen({ navigation, route }) {
           </Text>
         )}
 
-        {/* Next Button */}
+        {/* Next Button - Updated text */}
         <TouchableOpacity 
           style={[
             styles.nextButton,
@@ -252,7 +275,7 @@ export default function LearningGoalsScreen({ navigation, route }) {
           onPress={handleNext}
           disabled={selectedGoals.length === 0}
         >
-          <Text style={styles.nextButtonText}>Continue to Signup</Text>
+          <Text style={styles.nextButtonText}>Continue to Sign In</Text>
         </TouchableOpacity>
 
         {/* Skip Option */}
