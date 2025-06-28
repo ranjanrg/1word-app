@@ -289,7 +289,7 @@ const AssessmentScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Header with Black Gradient */}
+      {/* Reduced Header with Black Gradient */}
       <LinearGradient
         colors={['#000', '#2d3436']}
         style={styles.headerGradient}
@@ -310,9 +310,8 @@ const AssessmentScreen = ({ navigation }) => {
         >
           {/* Title Section */}
           <View style={styles.titleSection}>
-            <Text style={styles.title}>Vocabulary Assessment</Text>
             <Text style={styles.subtitle}>
-              Tap the words you're familiar with to personalize your learning
+              Show us <Text style={styles.highlightedText}>what you know</Text>
             </Text>
           </View>
           
@@ -421,28 +420,26 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     paddingTop: 50,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   header: {
     paddingHorizontal: 20,
   },
   titleSection: {
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-    textAlign: 'center',
+    marginBottom: 20,
   },
   subtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    lineHeight: 22,
+    fontSize: 32,
+    color: 'rgba(255,255,255,0.9)',
+    lineHeight: 28,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+  },
+  highlightedText: {
+    color: '#ffffff',
+    fontWeight: '800',
   },
   progressSection: {
     marginBottom: 16,

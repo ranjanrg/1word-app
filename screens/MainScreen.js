@@ -126,6 +126,12 @@ export default function MainScreen({ navigation }) {
     }, [])
   );
 
+  // Helper function to get word color
+  const getWordColor = (index) => {
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+    return colors[index % colors.length];
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -141,19 +147,17 @@ export default function MainScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Enhanced Header with Gradient */}
+      {/* Simplified Header with Gradient */}
       <LinearGradient colors={['#000', '#2d3436']} style={styles.headerGradient}>
         <View style={styles.header}>
           <View style={styles.logoSection}>
-            <Text style={styles.logoIcon}>📚</Text>
-            <Text style={styles.logoText}>1Word</Text>
-            <View style={styles.betaBadge}>
-              <Text style={styles.betaText}>BETA</Text>
-            </View>
+            <Text style={styles.logoText}>OneWord</Text>
           </View>
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakIcon}>🔥</Text>
-            <Text style={styles.streakNumber}>{currentStreak}</Text>
+          <View style={styles.streakContainer}>
+            <View style={styles.streakBadge}>
+              <Text style={styles.streakIcon}>🔥</Text>
+              <Text style={styles.streakNumber}>{currentStreak}</Text>
+            </View>
           </View>
         </View>
       </LinearGradient>
@@ -162,95 +166,127 @@ export default function MainScreen({ navigation }) {
         {/* Enhanced Stats Cards */}
         <Animated.View style={[styles.statsContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{wordsLearned}</Text>
-              <Text style={styles.statLabel}>Words Learned</Text>
-              <View style={styles.statIcon}>
-                <Text style={styles.statEmoji}>📖</Text>
+            <TouchableOpacity 
+              style={styles.statCard}
+              activeOpacity={0.95}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            >
+              <View style={styles.statContent}>
+                <Text style={styles.statNumber}>{wordsLearned}</Text>
+                <Text style={styles.statLabel}>Words{'\n'}Learned</Text>
               </View>
-            </View>
+            </TouchableOpacity>
             
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{currentStreak}</Text>
-              <Text style={styles.statLabel}>Day Streak</Text>
-              <View style={styles.statIcon}>
-                <Text style={styles.statEmoji}>🔥</Text>
+            <TouchableOpacity 
+              style={styles.statCard}
+              activeOpacity={0.95}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            >
+              <View style={styles.statContent}>
+                <Text style={styles.statNumber}>{currentStreak}</Text>
+                <Text style={styles.statLabel}>Day{'\n'}Streak</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         </Animated.View>
 
-        {/* Enhanced Hero CTA */}
+        {/* Simplified Hero CTA */}
         <Animated.View style={[styles.heroSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <TouchableOpacity style={styles.heroButton} onPress={handleLearnToday}>
-            <LinearGradient colors={['#000', '#2d3436', '#636e72']} style={styles.heroGradient}>
-              <View style={styles.heroButtonContent}>
-                <View style={styles.heroLeft}>
-                  <View style={styles.heroIconContainer}>
-                    <Text style={styles.heroEmoji}>✨</Text>
-                  </View>
-                  <View style={styles.heroTextContainer}>
-                    <Text style={styles.heroTitle}>
-                      {dailyStatus.canLearn ? "Learn Today's Word" : "Daily Goal Complete!"}
-                    </Text>
-                    <Text style={styles.heroSubtitle}>
-                      {dailyStatus.canLearn 
-                        ? (currentStreak > 0 ? `Continue your ${currentStreak}-day streak!` : 'Start your learning journey!')
-                        : 'Come back tomorrow for your next word'
-                      }
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.heroArrow}>
-                  <Text style={styles.arrowText}>
-                    {dailyStatus.canLearn ? "→" : "✓"}
-                  </Text>
-                </View>
+          <TouchableOpacity 
+            style={styles.heroButton} 
+            onPress={handleLearnToday}
+            activeOpacity={0.95}
+          >
+            <View style={styles.heroContent}>
+              <View style={styles.heroTextSection}>
+                <Text style={styles.heroTitle}>
+                  {dailyStatus.canLearn ? "Learn Today's Word" : "Daily Goal Complete"}
+                </Text>
+                <Text style={styles.heroSubtitle}>
+                  {dailyStatus.canLearn 
+                    ? (currentStreak > 0 ? `Continue your ${currentStreak}-day streak` : 'Start your learning journey')
+                    : 'Come back tomorrow for your next word'
+                  }
+                </Text>
               </View>
-              <View style={styles.floatingDot1} />
-              <View style={styles.floatingDot2} />
-            </LinearGradient>
+              <View style={styles.heroArrowContainer}>
+                <Text style={styles.heroArrow}>
+                  {dailyStatus.canLearn ? "→" : "✓"}
+                </Text>
+              </View>
+            </View>
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Recent Words Section */}
+        {/* Enhanced Recent Words Section */}
         <Animated.View style={[styles.recentSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recently Learned</Text>
             {recentWords.length > 3 && (
-              <TouchableOpacity>
+              <TouchableOpacity style={styles.seeAllButton}>
                 <Text style={styles.seeAllText}>See All</Text>
+                <Text style={styles.seeAllArrow}>→</Text>
               </TouchableOpacity>
             )}
           </View>
           
           {recentWords.length > 0 ? (
             recentWords.slice(0, 3).map((item, index) => (
-              <View key={index} style={styles.recentItem}>
-                <View style={styles.recentLeft}>
-                  <View style={styles.recentEmojiContainer}>
-                    <Text style={styles.recentEmoji}>{item.emoji}</Text>
-                  </View>
-                  <View style={styles.recentTextContainer}>
-                    <Text style={styles.recentWord}>{item.word}</Text>
-                    <Text style={styles.recentMeaning}>{item.meaning}</Text>
-                    <Text style={styles.recentDate}>{item.date}</Text>
+              <TouchableOpacity 
+                key={index} 
+                style={[
+                  styles.recentItem,
+                  { 
+                    transform: [{ 
+                      translateY: fadeAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [20 * (index + 1), 0]
+                      })
+                    }]
+                  }
+                ]}
+                activeOpacity={0.95}
+                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              >
+                <View style={styles.recentContent}>
+                  <View style={styles.recentLeft}>
+                    <View style={[styles.wordInitial, { backgroundColor: getWordColor(index) }]}>
+                      <Text style={styles.wordInitialText}>
+                        {item.word.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.recentTextContent}>
+                      <View style={styles.wordHeader}>
+                        <Text style={styles.recentWord}>{item.word}</Text>
+                        <View style={styles.completedBadge}>
+                          <Text style={styles.completedText}>✓</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.recentMeaning} numberOfLines={2}>
+                        {item.meaning}
+                      </Text>
+                      <View style={styles.wordFooter}>
+                        <Text style={styles.recentDate}>{item.date}</Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
-                <View style={styles.recentBadge}>
-                  <Text style={styles.recentBadgeText}>✓</Text>
-                </View>
-              </View>
+              </TouchableOpacity>
             ))
           ) : (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🌟</Text>
+              <View style={styles.emptyIconContainer}>
+                <View style={styles.emptyIconOuter}>
+                  <View style={styles.emptyIconInner} />
+                </View>
+              </View>
               <Text style={styles.emptyTitle}>Ready to start learning?</Text>
               <Text style={styles.emptySubtitle}>
-                Learn your first word today and begin your vocabulary journey
+                Learn your first word today and begin building your vocabulary
               </Text>
               <TouchableOpacity style={styles.emptyButton} onPress={handleLearnToday}>
-                <Text style={styles.emptyButtonText}>Get Started</Text>
+                <Text style={styles.emptyButtonText}>Start Learning</Text>
+                <Text style={styles.emptyButtonArrow}>→</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -259,31 +295,45 @@ export default function MainScreen({ navigation }) {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Bottom Navigation */}
+      {/* Modern Bottom Navigation with Word-Representative Icons */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={[styles.navItem, styles.activeNavItem]}>
           <View style={styles.navIconContainer}>
-            <Text style={styles.navIcon}>🏠</Text>
+            {/* House Icon */}
+            <View style={styles.houseIcon}>
+              <View style={styles.houseRoof} />
+              <View style={styles.houseBase} />
+              <View style={styles.houseDoor} />
+            </View>
           </View>
           <Text style={[styles.navLabel, styles.activeNavLabel]}>Home</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem} onPress={handleLearnToday}>
           <View style={styles.navIconContainer}>
-            <Text style={styles.navIcon}>📖</Text>
+            {/* Book Icon */}
+            <View style={styles.bookIcon}>
+              <View style={styles.bookCover} />
+              <View style={styles.bookPage1} />
+              <View style={styles.bookPage2} />
+            </View>
           </View>
           <Text style={styles.navLabel}>Learn</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Settings')}>
           <View style={styles.navIconContainer}>
-            <Text style={styles.navIcon}>⚙️</Text>
+            {/* Gear Icon */}
+            <View style={styles.gearIcon}>
+              <View style={styles.gearOuter} />
+              <View style={styles.gearInner} />
+            </View>
           </View>
           <Text style={styles.navLabel}>Settings</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Custom Daily Goal Complete Modal */}
+      {/* Simplified Daily Goal Complete Modal */}
       <Modal
         transparent={true}
         visible={showDailyCompleteModal}
@@ -300,77 +350,44 @@ export default function MainScreen({ navigation }) {
               },
             ]}
           >
-            <LinearGradient colors={['#000', '#2d3436']} style={modalStyles.gradient}>
+            <View style={modalStyles.modalContent}>
               {/* Success Icon */}
               <View style={modalStyles.iconContainer}>
-                <Text style={modalStyles.successIcon}>🎯</Text>
-              </View>
-              
-              {/* Title */}
-              <Text style={modalStyles.title}>
-                Daily Goal Complete!
-              </Text>
-              
-              {/* Message */}
-              <Text style={modalStyles.message}>
-                You've already learned your word for today!
-              </Text>
-              
-              {/* Countdown */}
-              <View style={modalStyles.countdownContainer}>
-                <Text style={modalStyles.countdownLabel}>
-                  Next word available in:
-                </Text>
-                <View style={modalStyles.timeContainer}>
-                  <View style={modalStyles.timeBox}>
-                    <Text style={modalStyles.timeNumber}>
-                      {timeUntilNext.hours}
-                    </Text>
-                    <Text style={modalStyles.timeUnit}>hours</Text>
-                  </View>
-                  <Text style={modalStyles.timeSeparator}>:</Text>
-                  <View style={modalStyles.timeBox}>
-                    <Text style={modalStyles.timeNumber}>
-                      {timeUntilNext.minutes}
-                    </Text>
-                    <Text style={modalStyles.timeUnit}>mins</Text>
-                  </View>
-                  <Text style={modalStyles.timeSeparator}>:</Text>
-                  <View style={modalStyles.timeBox}>
-                    <Text style={modalStyles.timeNumber}>
-                      {timeUntilNext.seconds}
-                    </Text>
-                    <Text style={modalStyles.timeUnit}>secs</Text>
-                  </View>
+                <View style={modalStyles.successIconCircle}>
+                  <Text style={modalStyles.successIcon}>✓</Text>
                 </View>
               </View>
               
-              {/* Encouragement */}
-              <Text style={modalStyles.encouragement}>
-                Great job on maintaining your learning streak! 🔥
+              {/* Title */}
+              <Text style={modalStyles.title}>Daily Goal Complete!</Text>
+              
+              {/* Message */}
+              <Text style={modalStyles.message}>
+                You've learned your word for today. Come back tomorrow to continue your streak.
               </Text>
               
-              {/* Action Button */}
-              <View style={modalStyles.buttonWrapper}>
-                <TouchableOpacity 
-                  style={modalStyles.primaryButton}
-                  onPress={() => {
-                    setShowDailyCompleteModal(false);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={modalStyles.primaryButtonText}>
-                    Got it! ✨
+              {/* Simplified Countdown */}
+              <View style={modalStyles.countdownContainer}>
+                <Text style={modalStyles.countdownLabel}>Next word available in</Text>
+                <View style={modalStyles.timeDisplay}>
+                  <Text style={modalStyles.timeText}>
+                    {timeUntilNext.hours}h {timeUntilNext.minutes}m {timeUntilNext.seconds}s
                   </Text>
-                </TouchableOpacity>
+                </View>
               </View>
               
-              {/* Floating Dots */}
-              <View style={modalStyles.floatingDot1} />
-              <View style={modalStyles.floatingDot2} />
-              <View style={modalStyles.floatingDot3} />
-            </LinearGradient>
+              {/* Action Button */}
+              <TouchableOpacity 
+                style={modalStyles.primaryButton}
+                onPress={() => {
+                  setShowDailyCompleteModal(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={modalStyles.primaryButtonText}>Got it</Text>
+              </TouchableOpacity>
+            </View>
           </Animated.View>
         </View>
       </Modal>
@@ -378,7 +395,6 @@ export default function MainScreen({ navigation }) {
   );
 }
 
-// Keep all your existing styles, just add these new ones
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -407,208 +423,134 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoIcon: {
-    fontSize: 28,
-    marginRight: 12,
+    flex: 1,
   },
   logoText: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
-    letterSpacing: -1,
+    letterSpacing: -1.2,
   },
-  betaBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  betaText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
-  // New subscription plan badge
-  planBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  planText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginRight: 4,
-  },
-  daysText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
+  streakContainer: {
+    alignItems: 'flex-end',
   },
   streakBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   streakIcon: {
-    fontSize: 18,
-    marginRight: 6,
+    fontSize: 20,
+    marginRight: 8,
   },
   streakNumber: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
+    letterSpacing: -0.5,
   },
   scrollContainer: {
     flex: 1,
   },
   statsContainer: {
     marginHorizontal: 20,
-    marginTop: 20,
+    marginTop: 24,
   },
   statsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 16,
   },
   statCard: {
     backgroundColor: '#fff',
     flex: 1,
-    marginHorizontal: 6,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    position: 'relative',
+    borderRadius: 20,
+    padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#f8f9fa',
+  },
+  statContent: {
+    alignItems: 'flex-start',
   },
   statNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 42,
+    fontWeight: '800',
     color: '#000',
-    marginBottom: 4,
+    marginBottom: 8,
+    letterSpacing: -1,
+    lineHeight: 42,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#666',
-    fontWeight: '500',
-  },
-  statIcon: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f8f9fa',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statEmoji: {
-    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 18,
+    letterSpacing: 0.2,
   },
   heroSection: {
     paddingHorizontal: 20,
-    marginTop: 24,
+    marginTop: 28,
   },
   heroButton: {
-    borderRadius: 24,
-    overflow: 'hidden',
+    backgroundColor: '#000',
+    borderRadius: 16,
+    padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  heroGradient: {
-    padding: 28,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  heroButtonContent: {
+  heroContent: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 2,
-  },
-  heroLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
+  },
+  heroTextSection: {
     flex: 1,
-  },
-  heroIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 16,
-  },
-  heroEmoji: {
-    fontSize: 28,
-  },
-  heroTextContainer: {
-    flex: 1,
   },
   heroTitle: {
     color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   heroSubtitle: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 16,
-    lineHeight: 22,
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 20,
+    letterSpacing: 0.1,
   },
-  heroArrow: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  heroArrowContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  arrowText: {
+  heroArrow: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
-  },
-  floatingDot1: {
-    position: 'absolute',
-    top: 20,
-    right: 80,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  floatingDot2: {
-    position: 'absolute',
-    bottom: 30,
-    right: 120,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   recentSection: {
     paddingHorizontal: 20,
@@ -625,75 +567,113 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
   },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
   seeAllText: {
-    fontSize: 14,
-    color: '#007AFF',
+    fontSize: 13,
+    color: '#000',
     fontWeight: '600',
+    marginRight: 4,
+  },
+  seeAllArrow: {
+    fontSize: 12,
+    color: '#000',
+    fontWeight: 'bold',
   },
   recentItem: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#f8f9fa',
+  },
+  recentContent: {
+    // Container for recent item content
   },
   recentLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    alignItems: 'flex-start',
   },
-  recentEmojiContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f8f9fa',
+  wordInitial: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  recentEmoji: {
-    fontSize: 20,
+  wordInitialText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  recentTextContainer: {
+  recentTextContent: {
     flex: 1,
   },
+  wordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   recentWord: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#000',
-    marginBottom: 2,
     textTransform: 'capitalize',
+    letterSpacing: -0.3,
+    flex: 1,
+  },
+  completedBadge: {
+    backgroundColor: '#22c55e',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completedText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   recentMeaning: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 2,
-    lineHeight: 18,
+    lineHeight: 19,
+    fontWeight: '500',
+    marginBottom: 10,
+  },
+  wordFooter: {
+    // Just contains the date now
   },
   recentDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#999',
-    fontWeight: '500',
-  },
-  recentBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recentBadgeText: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   emptyState: {
     backgroundColor: '#fff',
@@ -702,35 +682,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f8f9fa',
   },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
+  emptyIconContainer: {
+    marginBottom: 24,
+  },
+  emptyIconOuter: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  emptyIconInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#cbd5e1',
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#000',
     marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
+    lineHeight: 22,
+    marginBottom: 28,
+    fontWeight: '500',
+    paddingHorizontal: 8,
   },
   emptyButton: {
     backgroundColor: '#000',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
   emptyButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    marginRight: 6,
+  },
+  emptyButtonArrow: {
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
@@ -738,36 +751,131 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#f1f5f9',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 8,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   activeNavItem: {
     backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingVertical: 16,
   },
   navIconContainer: {
-    marginBottom: 4,
+    marginBottom: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  navIcon: {
-    fontSize: 22,
+  // House Icon (Home)
+  houseIcon: {
+    width: 22,
+    height: 20,
+    position: 'relative',
+  },
+  houseRoof: {
+    width: 22,
+    height: 10,
+    backgroundColor: '#64748b',
+    clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+    transform: [{ rotate: '0deg' }],
+    borderWidth: 0,
+    borderLeftWidth: 11,
+    borderRightWidth: 11,
+    borderBottomWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#64748b',
+    backgroundColor: 'transparent',
+  },
+  houseBase: {
+    width: 16,
+    height: 12,
+    backgroundColor: '#64748b',
+    marginTop: -2,
+    marginLeft: 3,
+    borderRadius: 2,
+  },
+  houseDoor: {
+    width: 4,
+    height: 6,
+    backgroundColor: '#ffffff',
+    position: 'absolute',
+    bottom: 0,
+    left: 9,
+    borderRadius: 1,
+  },
+  // Book Icon (Learn)
+  bookIcon: {
+    width: 18,
+    height: 20,
+    position: 'relative',
+  },
+  bookCover: {
+    width: 18,
+    height: 20,
+    backgroundColor: '#64748b',
+    borderRadius: 2,
+    borderRightWidth: 2,
+    borderRightColor: '#475569',
+  },
+  bookPage1: {
+    width: 14,
+    height: 16,
+    backgroundColor: '#ffffff',
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    borderRadius: 1,
+  },
+  bookPage2: {
+    width: 12,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+    position: 'absolute',
+    top: 6,
+    left: 3,
+  },
+  // Gear Icon (Settings)
+  gearIcon: {
+    width: 20,
+    height: 20,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gearOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: '#64748b',
+    position: 'relative',
+  },
+  gearInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ffffff',
+    position: 'absolute',
+    top: 6,
+    left: 6,
   },
   navLabel: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   activeNavLabel: {
     color: '#000',
@@ -778,145 +886,106 @@ const styles = StyleSheet.create({
 const modalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
   container: {
     width: '100%',
-    maxWidth: 350,
-    borderRadius: 24,
+    maxWidth: 340,
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  gradient: {
+  modalContent: {
+    backgroundColor: '#fff',
     padding: 32,
     alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
   },
   iconContainer: {
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+  successIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   successIcon: {
-    fontSize: 64,
+    fontSize: 28,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#000',
     textAlign: 'center',
     marginBottom: 12,
+    letterSpacing: -0.3,
   },
   message: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 15,
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
     lineHeight: 22,
+    fontWeight: '500',
   },
   countdownContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
     padding: 20,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    marginBottom: 28,
     alignItems: 'center',
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   countdownLabel: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#666',
     marginBottom: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  timeDisplay: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  timeBox: {
-    alignItems: 'center',
-    minWidth: 40,
-  },
-  timeNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 2,
-  },
-  timeUnit: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '500',
-  },
-  timeSeparator: {
-    fontSize: 20,
-    color: '#fff',
-    fontWeight: 'bold',
-    marginHorizontal: 6,
-  },
-  encouragement: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-    marginBottom: 32,
-    fontWeight: '500',
-  },
-  buttonWrapper: {
-    width: '100%',
+  timeText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    letterSpacing: 0.5,
   },
   primaryButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    marginTop: 8,
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 4 },
+    backgroundColor: '#000',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 3,
   },
   primaryButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
     textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  // Floating animation dots
-  floatingDot1: {
-    position: 'absolute',
-    top: 30,
-    right: 40,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  floatingDot2: {
-    position: 'absolute',
-    bottom: 60,
-    left: 30,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  floatingDot3: {
-    position: 'absolute',
-    top: 120,
-    left: 50,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    letterSpacing: 0.3,
   },
 });

@@ -124,30 +124,6 @@ export default function LearningGoalsScreen({ navigation, route }) {
     navigation.navigate('Login');
   };
 
-  const handleSkip = async () => {
-    // Save data even when skipping (with empty goals)
-    const assessmentDataWithEmptyGoals = {
-      userLevel,
-      score,
-      totalWords,
-      correctAnswers,
-      percentile,
-      selectedWords,
-      learningGoals: []
-    };
-    
-    try {
-      await SecureStore.setItemAsync('pendingAssessmentData', JSON.stringify(assessmentDataWithEmptyGoals));
-    } catch (error) {
-      console.error('Error saving assessment data:', error);
-    }
-    
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    // Navigate to Google Login
-    navigation.navigate('Login');
-  };
-
   const getLevelEmoji = () => {
     switch (userLevel) {
       case 'Beginner': return '🌱';
@@ -277,14 +253,6 @@ export default function LearningGoalsScreen({ navigation, route }) {
         >
           <Text style={styles.nextButtonText}>Continue to Sign In</Text>
         </TouchableOpacity>
-
-        {/* Skip Option */}
-        <TouchableOpacity 
-          style={styles.skipButton}
-          onPress={handleSkip}
-        >
-          <Text style={styles.skipButtonText}>Skip for now</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -334,11 +302,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   title: {
-    fontSize: 26,
+    fontSize: 30,
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',
     marginBottom: 12,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
@@ -411,7 +380,7 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     alignItems: 'center',
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   progressDots: {
     flexDirection: 'row',
@@ -443,14 +412,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  skipButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  skipButtonText: {
-    color: '#666',
-    fontSize: 14,
-    fontWeight: '500',
   },
 });

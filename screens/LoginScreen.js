@@ -1,8 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert, StatusBar } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,35 +38,15 @@ const Login = () => {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={handleBackToWelcome}
-        >
-          <Icon name="arrow-back" size={24} color="#666" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to continue your vocabulary journey</Text>
+        <Text style={styles.title}>Create an account</Text>
       </View>
 
-      {/* Content */}
+      {/* Content - Centered Google Button */}
       <View style={styles.content}>
-        <View style={styles.illustration}>
-          <Icon name="account-circle" size={120} color="#4285F4" />
-        </View>
-
-        <Text style={styles.welcomeText}>
-          Sign in to sync your progress
-        </Text>
-        
-        <Text style={styles.description}>
-          Access your vocabulary progress, streak, and personalized lessons across all your devices.
-        </Text>
-      </View>
-
-      {/* Auth Section */}
-      <View style={styles.authSection}>
         {/* Google Sign-In Button */}
         <TouchableOpacity 
           style={[styles.googleButton, isLoading && styles.buttonDisabled]}
@@ -75,33 +54,25 @@ const Login = () => {
           disabled={isLoading}
           activeOpacity={0.8}
         >
-          <Icon name="account-circle" size={24} color="#fff" style={styles.googleIcon} />
+          {/* Google G Logo SVG */}
+          <View style={styles.googleIcon}>
+            <View style={styles.googleG}>
+              <View style={[styles.googleSegment, styles.googleBlue]} />
+              <View style={[styles.googleSegment, styles.googleGreen]} />
+              <View style={[styles.googleSegment, styles.googleYellow]} />
+              <View style={[styles.googleSegment, styles.googleRed]} />
+            </View>
+          </View>
+          
           <Text style={styles.googleButtonText}>
-            {isLoading ? 'Signing in...' : 'Continue with Google'}
+            {isLoading ? 'Signing in...' : 'Sign in with Google'}
           </Text>
         </TouchableOpacity>
+      </View>
 
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Guest Option */}
-        <TouchableOpacity 
-          style={[styles.guestButton, isLoading && styles.buttonDisabled]}
-          onPress={handleContinueAsGuest}
-          disabled={isLoading}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.guestButtonText}>Continue as Guest</Text>
-        </TouchableOpacity>
-
-        {/* Info Text */}
-        <Text style={styles.infoText}>
-          Guest mode won't save your progress. Sign in to keep your data safe.
-        </Text>
+      {/* Bottom Section - Empty */}
+      <View style={styles.bottomSection}>
+        {/* Intentionally empty */}
       </View>
     </View>
   );
@@ -111,113 +82,97 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
-    paddingHorizontal: 24,
   },
   header: {
-    marginTop: height * 0.08,
-    marginBottom: 40,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    padding: 8,
-    marginBottom: 20,
+    paddingTop: height * 0.1,
+    paddingHorizontal: 32,
+    alignItems: 'flex-start',
   },
   title: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
+    color: '#000000',
+    letterSpacing: -1,
+    lineHeight: 42,
   },
   content: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
   },
-  illustration: {
-    marginBottom: 40,
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  description: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
-    paddingHorizontal: 20,
-  },
-  authSection: {
-    paddingBottom: 40,
+  bottomSection: {
+    paddingBottom: height * 0.15,
+    // Empty space at bottom
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4285F4',
+    backgroundColor: '#ffffff',
     paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    marginBottom: 20,
-    elevation: 2,
+    paddingHorizontal: 24,
+    borderRadius: 50,
+    width: width - 64,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-  },
-  googleIcon: {
-    marginRight: 12,
-  },
-  googleButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#999',
-    fontSize: 14,
-  },
-  guestButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  guestButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '500',
+    elevation: 2,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-  infoText: {
-    fontSize: 12,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 18,
+  googleIcon: {
+    marginRight: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleG: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  googleSegment: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+  },
+  googleBlue: {
+    backgroundColor: '#4285F4',
+    top: 0,
+    right: 0,
+    borderTopRightRadius: 10,
+  },
+  googleRed: {
+    backgroundColor: '#EA4335',
+    top: 0,
+    left: 0,
+    borderTopLeftRadius: 10,
+  },
+  googleYellow: {
+    backgroundColor: '#FBBC05',
+    bottom: 0,
+    left: 0,
+    borderBottomLeftRadius: 10,
+  },
+  googleGreen: {
+    backgroundColor: '#34A853',
+    bottom: 0,
+    right: 0,
+    borderBottomRightRadius: 10,
+  },
+  googleButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
 });
 
