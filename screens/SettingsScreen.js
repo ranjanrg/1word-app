@@ -58,6 +58,15 @@ const SettingsScreen = ({ navigation }) => {
   const [showDifficultyModal, setShowDifficultyModal] = useState(false);
   const [currentDifficulty, setCurrentDifficulty] = useState(userLevel || 'Beginner');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  
+  // Custom Alert Modal States
+  const [customAlert, setCustomAlert] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info', // 'info', 'success', 'warning', 'error'
+    buttons: []
+  });
 
   // Difficulty levels
   const difficultyLevels = [
@@ -130,17 +139,17 @@ const SettingsScreen = ({ navigation }) => {
       const result = await updateUser({}, newDifficulty);
       
       if (result.success) {
-        Alert.alert(
+        showCustomAlert(
           'Level Updated! 🎯',
           `Your learning level has been updated to ${newDifficulty}. You'll now receive ${newDifficulty.toLowerCase()} level words.`,
-          [{ text: 'OK' }]
+          'success'
         );
       } else {
-        Alert.alert('Error', 'Failed to update difficulty level. Please try again.');
+        showCustomAlert('Error', 'Failed to update difficulty level. Please try again.', 'error');
       }
     } catch (error) {
       console.error('Error updating difficulty:', error);
-      Alert.alert('Error', 'Failed to update difficulty level.');
+      showCustomAlert('Error', 'Failed to update difficulty level.', 'error');
     }
   };
 
@@ -173,16 +182,16 @@ const SettingsScreen = ({ navigation }) => {
       // Schedule immediate test notification
       try {
         await NotificationManager.scheduleTestNotification();
-        Alert.alert(
+        showCustomAlert(
           '🧪 Test Notification Scheduled',
           'A test notification will appear in about 1 minute. Make sure to minimize the app to see it!',
-          [{ text: 'OK' }]
+          'success'
         );
       } catch (error) {
-        Alert.alert(
+        showCustomAlert(
           '❌ Test Failed',
           'Could not schedule test notification. Please check notification permissions.',
-          [{ text: 'OK' }]
+          'error'
         );
       }
     } else {
@@ -190,50 +199,72 @@ const SettingsScreen = ({ navigation }) => {
       const success = await NotificationManager.scheduleDailyReminder(hour, minute);
       
       if (success) {
-        Alert.alert(
+        showCustomAlert(
           '✅ Reminder Set',
           `Daily learning reminder set for ${timeString}`,
-          [{ text: 'OK' }]
+          'success'
         );
       } else {
-        Alert.alert(
+        showCustomAlert(
           '❌ Permission Required',
           'Please enable notifications in your device settings to receive learning reminders.',
-          [{ text: 'OK' }]
+          'warning'
         );
       }
     }
   };
 
+  // Enhanced Alert Buttons with Custom Modal
+  const showCustomAlert = (title, message, type = 'info', buttons = [{ text: 'OK' }]) => {
+    setCustomAlert({
+      visible: true,
+      title,
+      message,
+      type,
+      buttons
+    });
+  };
+
+  const hideCustomAlert = () => {
+    setCustomAlert({
+      visible: false,
+      title: '',
+      message: '',
+      type: 'info',
+      buttons: []
+    });
+  };
+
   // ✅ FIXED: Removed manual navigation - AuthContext handles this automatically
   const handleSignOut = async () => {
-    Alert.alert(
+    showCustomAlert(
       'Sign Out',
-      'Are you sure you want to sign out?',
+      'Are you sure you want to sign out of your account?',
+      'warning',
       [
         {
           text: 'Cancel',
           style: 'cancel',
+          onPress: hideCustomAlert
         },
         {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
+            hideCustomAlert();
             console.log('🚪 User requested sign out');
             
             try {
               const result = await signOut();
               if (result.success) {
                 console.log('✅ Sign out successful');
-                // ✅ REMOVED: navigation.navigate('AuthWelcome');
-                // AuthContext will automatically handle navigation when sign out is detected
               } else {
                 console.error('❌ Sign out failed:', result.error);
-                Alert.alert('Error', 'Failed to sign out. Please try again.');
+                showCustomAlert('Error', 'Failed to sign out. Please try again.', 'error');
               }
             } catch (error) {
               console.error('Sign out error:', error);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
+              showCustomAlert('Error', 'Failed to sign out. Please try again.', 'error');
             }
           },
         },
@@ -246,26 +277,62 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleAbout = () => {
-    Alert.alert(
-      'About ONE WORD',
+    showCustomAlert(
+      'About OneWord',
       'Expand your vocabulary, one word at a time.\n\nVersion 1.0.0\n\nBuilt with ❤️ for learners everywhere.',
-      [{ text: 'OK' }]
+      'info'
     );
   };
 
   const handleHelp = () => {
-    Alert.alert(
+    showCustomAlert(
       'Help & Support',
-      'Need help? Contact us at talkwithranjan19@gmail.com\n\nOr visit our FAQ section on the website.',
-      [{ text: 'OK' }]
+      'Need help? Contact us at:\ntalkwithranjan19@gmail.com\n\nOr visit our FAQ section on the website for quick answers to common questions.',
+      'info'
     );
   };
 
   const handlePrivacy = () => {
-    Alert.alert(
+    showCustomAlert(
       'Privacy Policy',
-      'Your privacy is important to us. We only collect data necessary to improve your learning experience.',
-      [{ text: 'OK' }]
+      'Your privacy is important to us. We only collect data necessary to improve your learning experience.\n\nWe never share your personal information with third parties.',
+      'info',
+      [
+        {
+          text: 'View Full Policy',
+          style: 'primary',
+          onPress: async () => {
+            hideCustomAlert();
+            try {
+              const { Linking } = require('react-native');
+              const url = 'https://sites.google.com/view/one-word-privacy-policy/home';
+              const supported = await Linking.canOpenURL(url);
+              
+              if (supported) {
+                await Linking.openURL(url);
+              } else {
+                showCustomAlert(
+                  'Error',
+                  'Unable to open privacy policy page. Please visit:\n\nhttps://sites.google.com/view/one-word-privacy-policy/home',
+                  'error'
+                );
+              }
+            } catch (error) {
+              console.error('Error opening privacy policy:', error);
+              showCustomAlert(
+                'Error',
+                'Unable to open privacy policy page. Please try again later.',
+                'error'
+              );
+            }
+          }
+        },
+        {
+          text: 'OK',
+          style: 'cancel',
+          onPress: hideCustomAlert
+        }
+      ]
     );
   };
 
@@ -458,23 +525,29 @@ const SettingsScreen = ({ navigation }) => {
           ]}
         >
           {isSignedIn ? (
-            /* Sign Out Button */
+            /* Enhanced Sign Out Button with styling like MainScreen */
             <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-              <LinearGradient
-                colors={['#ef4444', '#dc2626']}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.signOutButtonText}>Sign Out</Text>
-              </LinearGradient>
+              <View style={styles.actionButtonContent}>
+                <View style={styles.actionButtonTextSection}>
+                  <Text style={styles.actionButtonTitle}>Sign Out</Text>
+                  <Text style={styles.actionButtonSubtitle}>Sign out of your account</Text>
+                </View>
+                <View style={styles.actionButtonIconContainer}>
+                  <Text style={styles.actionButtonIcon}>→</Text>
+                </View>
+              </View>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp}>
-              <LinearGradient
-                colors={['#22c55e', '#16a34a']}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.signUpButtonText}>Create Account</Text>
-              </LinearGradient>
+              <View style={styles.actionButtonContent}>
+                <View style={styles.actionButtonTextSection}>
+                  <Text style={styles.actionButtonTitle}>Create Account</Text>
+                  <Text style={styles.actionButtonSubtitle}>Get the full OneWord experience</Text>
+                </View>
+                <View style={styles.actionButtonIconContainer}>
+                  <Text style={styles.actionButtonIcon}>→</Text>
+                </View>
+              </View>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -583,6 +656,79 @@ const SettingsScreen = ({ navigation }) => {
               <Text style={styles.cancelModalButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Custom Alert Modal */}
+      <Modal
+        transparent={true}
+        visible={customAlert.visible}
+        animationType="fade"
+        onRequestClose={hideCustomAlert}
+      >
+        <View style={styles.alertOverlay}>
+          <Animated.View 
+            style={[
+              styles.alertContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: slideAnim.interpolate({ inputRange: [0, 30], outputRange: [1, 0.9] }) }],
+              },
+            ]}
+          >
+            <View style={styles.alertContent}>
+              {/* Alert Icon */}
+              <View style={styles.alertIconContainer}>
+                <View style={[
+                  styles.alertIconCircle,
+                  { backgroundColor: 
+                    customAlert.type === 'success' ? '#22c55e' :
+                    customAlert.type === 'warning' ? '#f59e0b' :
+                    customAlert.type === 'error' ? '#ef4444' : '#3b82f6'
+                  }
+                ]}>
+                  <Text style={styles.alertIcon}>
+                    {customAlert.type === 'success' ? '✓' :
+                     customAlert.type === 'warning' ? '⚠' :
+                     customAlert.type === 'error' ? '✕' : 'ℹ'}
+                  </Text>
+                </View>
+              </View>
+              
+              {/* Alert Title */}
+              <Text style={styles.alertTitle}>{customAlert.title}</Text>
+              
+              {/* Alert Message */}
+              <Text style={styles.alertMessage}>{customAlert.message}</Text>
+              
+              {/* Alert Buttons */}
+              <View style={styles.alertButtonsContainer}>
+                {customAlert.buttons.map((button, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.alertButton,
+                      button.style === 'destructive' && styles.alertButtonDestructive,
+                      button.style === 'cancel' && styles.alertButtonCancel,
+                      button.style === 'primary' && styles.alertButtonPrimary,
+                      customAlert.buttons.length === 1 && styles.alertButtonSingle
+                    ]}
+                    onPress={button.onPress || hideCustomAlert}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[
+                      styles.alertButtonText,
+                      button.style === 'destructive' && styles.alertButtonTextDestructive,
+                      button.style === 'cancel' && styles.alertButtonTextCancel,
+                      button.style === 'primary' && styles.alertButtonTextPrimary
+                    ]}>
+                      {button.text}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Animated.View>
         </View>
       </Modal>
     </View>
@@ -774,37 +920,61 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     marginHorizontal: 20,
   },
+  // Enhanced Action Buttons (similar to MainScreen hero button)
   signOutButton: {
+    backgroundColor: '#ef4444',
     borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    padding: 20,
+    shadowColor: '#ef4444',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowRadius: 12,
     elevation: 6,
     marginBottom: 16,
   },
   signUpButton: {
+    backgroundColor: '#22c55e',
     borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    padding: 20,
+    shadowColor: '#22c55e',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowRadius: 12,
     elevation: 6,
   },
-  buttonGradient: {
-    paddingVertical: 16,
+  actionButtonContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  signOutButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  actionButtonTextSection: {
+    flex: 1,
+    marginRight: 16,
   },
-  signUpButtonText: {
+  actionButtonTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  actionButtonSubtitle: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  actionButtonIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonIcon: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: 'bold',
   },
   // Time Picker Modal Styles
@@ -954,6 +1124,102 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     fontWeight: '600',
+  },
+  // Custom Alert Modal Styles
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  alertContainer: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  alertContent: {
+    backgroundColor: '#fff',
+    padding: 28,
+    alignItems: 'center',
+  },
+  alertIconContainer: {
+    marginBottom: 20,
+  },
+  alertIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertIcon: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+    textAlign: 'center',
+    marginBottom: 12,
+    letterSpacing: -0.3,
+  },
+  alertMessage: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  alertButtonsContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  alertButton: {
+    flex: 1,
+    backgroundColor: '#000',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  alertButtonSingle: {
+    backgroundColor: '#000',
+  },
+  alertButtonDestructive: {
+    backgroundColor: '#ef4444',
+  },
+  alertButtonCancel: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  alertButtonPrimary: {
+    backgroundColor: '#3b82f6',
+  },
+  alertButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  alertButtonTextDestructive: {
+    color: '#fff',
+  },
+  alertButtonTextCancel: {
+    color: '#64748b',
+  },
+  alertButtonTextPrimary: {
+    color: '#fff',
   },
 });
 

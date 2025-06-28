@@ -171,9 +171,17 @@ export default function MainScreen({ navigation }) {
               activeOpacity={0.95}
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
             >
+              {/* Subtle gradient background */}
+              <LinearGradient
+                colors={['rgba(59, 130, 246, 0.05)', 'rgba(59, 130, 246, 0.02)']}
+                style={styles.statCardGradient}
+              />
+              {/* Top accent line */}
+              <View style={[styles.statCardAccent, { backgroundColor: '#3b82f6' }]} />
+              
               <View style={styles.statContent}>
                 <Text style={styles.statNumber}>{wordsLearned}</Text>
-                <Text style={styles.statLabel}>Words{'\n'}Learned</Text>
+                <Text style={styles.statLabel}>Words Learned</Text>
               </View>
             </TouchableOpacity>
             
@@ -182,9 +190,17 @@ export default function MainScreen({ navigation }) {
               activeOpacity={0.95}
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
             >
+              {/* Subtle gradient background */}
+              <LinearGradient
+                colors={['rgba(245, 158, 11, 0.05)', 'rgba(245, 158, 11, 0.02)']}
+                style={styles.statCardGradient}
+              />
+              {/* Top accent line */}
+              <View style={[styles.statCardAccent, { backgroundColor: '#f59e0b' }]} />
+              
               <View style={styles.statContent}>
                 <Text style={styles.statNumber}>{currentStreak}</Text>
-                <Text style={styles.statLabel}>Day{'\n'}Streak</Text>
+                <Text style={styles.statLabel}>Day Streak</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -295,7 +311,7 @@ export default function MainScreen({ navigation }) {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Modern Bottom Navigation with Word-Representative Icons */}
+      {/* Modern Bottom Navigation with Improved Learn Icon */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={[styles.navItem, styles.activeNavItem]}>
           <View style={styles.navIconContainer}>
@@ -311,11 +327,12 @@ export default function MainScreen({ navigation }) {
         
         <TouchableOpacity style={styles.navItem} onPress={handleLearnToday}>
           <View style={styles.navIconContainer}>
-            {/* Book Icon */}
-            <View style={styles.bookIcon}>
-              <View style={styles.bookCover} />
-              <View style={styles.bookPage1} />
-              <View style={styles.bookPage2} />
+            {/* Improved Learn Icon - Brain/Lightbulb style */}
+            <View style={styles.learnIcon}>
+              <View style={styles.learnIconBulb} />
+              <View style={styles.learnIconBase} />
+              <View style={styles.learnIconSparkle1} />
+              <View style={styles.learnIconSparkle2} />
             </View>
           </View>
           <Text style={styles.navLabel}>Learn</Text>
@@ -475,31 +492,59 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     flex: 1,
     borderRadius: 20,
-    padding: 24,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
     borderWidth: 1,
     borderColor: '#f8f9fa',
+    position: 'relative',
+    overflow: 'hidden',
   },
   statContent: {
     alignItems: 'flex-start',
+    zIndex: 2,
   },
   statNumber: {
-    fontSize: 42,
-    fontWeight: '800',
+    fontSize: 36,
+    fontWeight: '900',
     color: '#000',
-    marginBottom: 8,
+    marginBottom: 6,
     letterSpacing: -1,
-    lineHeight: 42,
+    lineHeight: 36,
   },
   statLabel: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#666',
     fontWeight: '600',
-    lineHeight: 18,
+    lineHeight: 16,
+    letterSpacing: 0.3,
+  },
+  // Add decorative elements for the cards
+  statCardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+  },
+  statCardAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  statSubtext: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '500',
+    marginTop: 4,
     letterSpacing: 0.2,
   },
   heroSection: {
@@ -613,20 +658,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    // REMOVED: All shadow properties for cleaner look
   },
   wordInitialText: {
     color: '#fff',
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.5,
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    // REMOVED: textShadow properties for cleaner look
   },
   recentTextContent: {
     flex: 1,
@@ -751,7 +790,7 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 20,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
@@ -764,15 +803,15 @@ const styles = StyleSheet.create({
   navItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   activeNavItem: {
     backgroundColor: '#f8f9fa',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   navIconContainer: {
-    marginBottom: 6,
+    marginBottom: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -816,36 +855,45 @@ const styles = StyleSheet.create({
     left: 9,
     borderRadius: 1,
   },
-  // Book Icon (Learn)
-  bookIcon: {
-    width: 18,
+  // NEW: Improved Learn Icon (Lightbulb/Brain style)
+  learnIcon: {
+    width: 20,
     height: 20,
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  bookCover: {
-    width: 18,
-    height: 20,
-    backgroundColor: '#64748b',
-    borderRadius: 2,
-    borderRightWidth: 2,
-    borderRightColor: '#475569',
-  },
-  bookPage1: {
+  learnIconBulb: {
     width: 14,
-    height: 16,
-    backgroundColor: '#ffffff',
+    height: 14,
+    backgroundColor: '#64748b',
+    borderRadius: 7,
+    position: 'relative',
+  },
+  learnIconBase: {
+    width: 8,
+    height: 4,
+    backgroundColor: '#64748b',
+    marginTop: 1,
+    borderRadius: 2,
+  },
+  learnIconSparkle1: {
+    width: 3,
+    height: 3,
+    backgroundColor: '#64748b',
+    borderRadius: 1.5,
     position: 'absolute',
     top: 2,
-    left: 2,
-    borderRadius: 1,
+    right: 1,
   },
-  bookPage2: {
-    width: 12,
-    height: 1,
-    backgroundColor: '#e2e8f0',
+  learnIconSparkle2: {
+    width: 2,
+    height: 2,
+    backgroundColor: '#64748b',
+    borderRadius: 1,
     position: 'absolute',
     top: 6,
-    left: 3,
+    left: 2,
   },
   // Gear Icon (Settings)
   gearIcon: {
