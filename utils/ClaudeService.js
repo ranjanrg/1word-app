@@ -1,15 +1,10 @@
-import config from '../config.js';
+import { supabase } from '../supabase.config.js';
 
-// ⚠️ IMPORTANT: Add your OpenAI API key to config.js
-const OPENAI_API_KEY = config.OPENAI_API_KEY || 'your-openai-api-key-here';
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-
-// Generate similar-looking words for discovery options
+// Helper functions (keep all the existing helper functions)
 const generateSimilarWord = (targetWord) => {
   const prefixes = ['pre', 'un', 'dis', 'mis', 'over'];
   const suffixes = ['ing', 'ed', 'ly', 'tion', 'ness'];
   
-  // Sometimes add prefix/suffix, sometimes just similar word
   if (Math.random() > 0.5 && targetWord.length > 4) {
     const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
     return prefix + targetWord.slice(2);
@@ -19,98 +14,120 @@ const generateSimilarWord = (targetWord) => {
   }
 };
 
-// Generate the 4-step learning flow from the lesson data
-const generateStepsFromLesson = (lesson) => {
-  console.log('🔧 Generating steps from lesson:', lesson);
+const transformLessonData = (lesson) => {
+  console.log('🔄 Transforming lesson data:', lesson);
   
-  // Ensure lesson object has all required properties
-  const safeLesson = {
-    word: lesson.word || 'journey',
-    emoji: lesson.emoji || '📚',
-    story: lesson.story || 'This is a story about learning new words.',
-    definition: lesson.definition || 'A word to learn',
-    wrongAnswers: lesson.wrongAnswers || ['Wrong 1', 'Wrong 2', 'Wrong 3'],
-    spellingHint: lesson.spellingHint || 'Think about the spelling',
-    usageOptions: lesson.usageOptions || [
-      'This is correct usage',
-      'This is wrong usage 1',
-      'This is wrong usage 2', 
-      'This is wrong usage 3'
-    ]
-  };
+  if (!lesson || !lesson.targetWord) {
+    console.error('❌ Invalid lesson structure');
+    return getFallbackTransformedData();
+  }
 
-  const steps = {
-    1: {
-      type: 'discovery',
-      story: safeLesson.story,
-      options: [
-        safeLesson.word,
-        generateSimilarWord(safeLesson.word),
-        generateSimilarWord(safeLesson.word),
-        generateSimilarWord(safeLesson.word)
-      ].sort(() => Math.random() - 0.5), // Shuffle options
-      correctAnswer: safeLesson.word
-    },
-    2: {
-      type: 'meaning',
-      question: `What does "${safeLesson.word}" mean?`,
-      options: [
-        safeLesson.definition,
-        ...safeLesson.wrongAnswers.slice(0, 3)
-      ].sort(() => Math.random() - 0.5),
-      correctAnswer: safeLesson.definition
-    },
-    3: {
-      type: 'spelling',
-      hint: safeLesson.spellingHint,
-      letters: safeLesson.word.toUpperCase().split('').sort(() => Math.random() - 0.5),
-      correctWord: safeLesson.word.toUpperCase()
-    },
-    4: {
-      type: 'usage',
-      question: `Which sentence uses "${safeLesson.word}" correctly?`,
-      options: safeLesson.usageOptions.slice(0, 4),
-      correctAnswer: safeLesson.usageOptions[0] // First option is correct
-    }
-  };
+  try {
+    const steps = lesson.steps || {};
+    const step1 = steps[1] || steps['1'] || {};
+    const step2 = steps[2] || steps['2'] || {};
+    const step3 = steps[3] || steps['3'] || {};
+    const step4 = steps[4] || steps['4'] || {};
 
-  console.log('✅ Generated steps:', steps);
-  return steps;
+    const transformed = {
+      targetWord: lesson.targetWord.toUpperCase(),
+      emoji: lesson.emoji || '📚',
+      story: lesson.story || step1.story || 'This is a story about learning new words.',
+      
+      storyOptions: (step1.options || [lesson.targetWord, 'option1', 'option2', 'option3']).map((option, index) => ({
+        id: String.fromCharCode(65 + index), // A, B, C, D
+        text: option || `option${index + 1}`,
+        correct: option === (step1.correctAnswer || lesson.targetWord)
+      })),
+      
+      meaningOptions: (() => {
+        const correctAnswer = step2.correctAnswer || lesson.definition || 'A word to learn';
+        const wrongAnswers = lesson.wrongAnswers || ['Wrong answer 1', 'Wrong answer 2', 'Wrong answer 3'];
+        const allOptions = step2.options || [correctAnswer, ...wrongAnswers];
+        
+        return allOptions.slice(0, 4).map((option, index) => ({
+          id: String.fromCharCode(65 + index),
+          text: option || `option${index + 1}`,
+          correct: option === correctAnswer
+        }));
+      })(),
+      
+      spellingLetters: (() => {
+        if (step3.letters && Array.isArray(step3.letters)) {
+          return step3.letters;
+        }
+        return lesson.targetWord.toUpperCase().split('').sort(() => Math.random() - 0.5);
+      })(),
+      
+      usageOptions: (() => {
+        const correctUsage = step4.correctAnswer || (lesson.usageOptions && lesson.usageOptions[0]) || `This is how you use ${lesson.targetWord.toLowerCase()} correctly.`;
+        const wrongUsages = lesson.usageOptions ? lesson.usageOptions.slice(1) : ['Wrong usage 1', 'Wrong usage 2', 'Wrong usage 3'];
+        const allOptions = step4.options || [correctUsage, ...wrongUsages];
+        
+        return allOptions.slice(0, 4).map((option, index) => ({
+          id: String.fromCharCode(65 + index),
+          text: option || `usage${index + 1}`,
+          correct: option === correctUsage
+        }));
+      })(),
+      
+      definition: lesson.definition || 'A vocabulary word'
+    };
+
+    console.log('✅ Transformed lesson data:', transformed);
+    return transformed;
+  } catch (error) {
+    console.error('❌ Error transforming lesson data:', error);
+    return getFallbackTransformedData();
+  }
+};
+
+const getFallbackTransformedData = () => {
+  return {
+    targetWord: 'JOURNEY',
+    emoji: '🚗',
+    story: 'Yesterday, I packed snacks for a long drive. We sang songs and played games in the car during our adventure.',
+    storyOptions: [
+      { id: 'A', text: 'journey', correct: true },
+      { id: 'B', text: 'story', correct: false },
+      { id: 'C', text: 'adventure', correct: false },
+      { id: 'D', text: 'travel', correct: false }
+    ],
+    meaningOptions: [
+      { id: 'A', text: 'Travel from one place to another', correct: true },
+      { id: 'B', text: 'A place to sleep', correct: false },
+      { id: 'C', text: 'Something to eat', correct: false },
+      { id: 'D', text: 'A type of music', correct: false }
+    ],
+    spellingLetters: ['J', 'O', 'U', 'R', 'N', 'E', 'Y'].sort(() => Math.random() - 0.5),
+    usageOptions: [
+      { id: 'A', text: 'We went on a journey to the mountains.', correct: true },
+      { id: 'B', text: 'Let\'s have a picnic in a park.', correct: false },
+      { id: 'C', text: 'We enjoyed shopping at a mall.', correct: false },
+      { id: 'D', text: 'We watched a movie at home.', correct: false }
+    ],
+    definition: 'Travel from one place to another'
+  };
 };
 
 // Validate if a string looks like a real human name
 const isValidHumanName = (name) => {
   if (!name || typeof name !== 'string') return false;
   
-  // Remove whitespace and convert to lowercase for checking
   const cleanName = name.trim().toLowerCase();
   
-  // Basic validation rules
   const validationRules = {
-    // Should be between 2-30 characters
     validLength: cleanName.length >= 2 && cleanName.length <= 30,
-    
-    // Should contain only letters, spaces, hyphens, and apostrophes
     validCharacters: /^[a-z\s\-']+$/.test(cleanName),
-    
-    // Should not be mostly numbers or special characters
     notMostlyNumbers: !/^\d+$/.test(cleanName),
-    
-    // Should not contain common username patterns
     notUsernamePattern: !(/\d{3,}|[_@#$%^&*()+=\[\]{}|\\:";'<>?,./]/.test(cleanName)),
-    
-    // Should not be email-like
     notEmailLike: !cleanName.includes('@') && !cleanName.includes('.com'),
-    
-    // Should start with a letter
     startsWithLetter: /^[a-z]/.test(cleanName)
   };
   
-  // Must pass all validation rules
   const isValid = Object.values(validationRules).every(rule => rule === true);
   
   console.log('🔍 Name validation for:', name);
-  console.log('📋 Validation results:', validationRules);
   console.log('✅ Is valid human name:', isValid);
   
   return isValid;
@@ -122,17 +139,15 @@ const getUserName = async () => {
     const DataManager = require('./DataManager').default;
     const profile = await DataManager.getUserProfile();
     
-    // Priority order: fullName -> name -> username -> email username (only if valid)
     const potentialNames = [
-      profile.fullName,     // NEW: Full name from signup
+      profile.fullName,
       profile.name,
       profile.username,
       profile.email ? profile.email.split('@')[0] : null
-    ].filter(Boolean); // Remove null/undefined values
+    ].filter(Boolean);
     
     console.log('🔍 Checking potential names:', potentialNames);
     
-    // Find the first valid human name
     for (const name of potentialNames) {
       if (isValidHumanName(name)) {
         console.log('👤 Using validated name:', name);
@@ -140,7 +155,6 @@ const getUserName = async () => {
       }
     }
     
-    // If no valid human name found, use generic 'User'
     console.log('⚠️ No valid human name found, using default: User');
     return 'User';
     
@@ -165,162 +179,33 @@ const getUserLearningGoals = async () => {
   }
 };
 
-// Enhanced word generation prompt with personalization
-const createWordGenerationPrompt = (userLevel, previousWords, learningGoals = [], userName = 'User') => {
-  const excludeWords = previousWords.length > 0 
-    ? `\nDo not use these previously learned words: ${previousWords.join(', ')}`
-    : '';
-
-  // Create learning goals context for story themes
-  const goalsContext = learningGoals.length > 0 
-    ? `\nUser's learning goals: ${learningGoals.join(', ')}. Create stories that relate to these interests when possible.`
-    : '';
-
-  // Level-specific word criteria
-  const levelCriteria = {
-    'Beginner': 'Use common, everyday words (4-7 letters) that appear frequently in daily conversation. Focus on practical, useful vocabulary.',
-    'Intermediate': 'Use moderately challenging words (6-10 letters) that are useful in professional and academic contexts. Include some nuanced vocabulary.',
-    'Advanced': 'Use sophisticated vocabulary (8-15 letters) including academic, professional, and nuanced terms. Challenge the learner with complex concepts.'
-  };
-
-  const wordCriteria = levelCriteria[userLevel] || levelCriteria['Beginner'];
-
-  // Story themes based on learning goals
-  const storyThemes = {
-    'Business': 'workplace scenarios, meetings, networking events, career growth',
-    'Travel': 'exploring new places, cultural experiences, adventures, local interactions',
-    'Technology': 'daily tech use, social media, apps, digital life scenarios',
-    'Health': 'fitness routines, healthy habits, medical visits, wellness activities',
-    'Education': 'learning experiences, school/college life, studying, academic achievements',
-    'Relationships': 'family time, friendships, dating, social gatherings',
-    'Entertainment': 'movies, music, games, hobbies, creative activities',
-    'Food': 'cooking, restaurants, cultural cuisines, family meals'
-  };
-
-  const relevantThemes = learningGoals.map(goal => storyThemes[goal]).filter(Boolean).join(', ');
-  const themeGuidance = relevantThemes 
-    ? `Story themes to consider: ${relevantThemes}.` 
-    : 'Use relatable daily life scenarios.';
-
-  return `You are a vocabulary learning app. Generate a complete word lesson for a ${userLevel} level English learner named ${userName}.
-
-${excludeWords}${goalsContext}
-
-Word Selection Criteria:
-- ${wordCriteria}
-- Choose words that are genuinely useful and relevant to the learner's level
-- Ensure the word matches the user's learning goals when applicable
-
-STORY GENERATION RULES (VERY IMPORTANT):
-- ${userName === 'User' ? 'DO NOT use any names in the story. Use pronouns like "someone", "a person", "they", "he/she" instead.' : `Use the name "${userName}" in the story when naturally possible.`}
-- Create a REAL STORY with characters, actions, and events - NOT an explanation or definition
-- The story must show the word in ACTION through what characters DO, not what they feel or think
-- Use ONLY simple, common words in the story (avoid complex vocabulary)
-- Make the story relatable and engaging for a ${userLevel} learner
-- ${themeGuidance}
-- Story should be 2-3 sentences that flow naturally
-- The target word should appear naturally in context WITHOUT being defined or explained
-- Create realistic, everyday scenarios with specific actions and events
-- Use present tense or simple past tense for clarity
-- Avoid complex sentence structures - keep it conversational
-- NEVER explain what the word means - just show it happening in the story
-
-Please provide your response in exactly this JSON format (no additional text):
-
-{
-  "word": "the target word in lowercase",
-  "emoji": "single relevant emoji",
-  "story": "${userName === 'User' ? 'A 2-3 sentence REAL STORY with characters and actions (NOT explanations). Use simple language without any names. Show the word happening through actions and events, never explain what it means. Use pronouns and general terms like "someone", "a person", "they" instead of names.' : `A 2-3 sentence REAL STORY with characters and actions (NOT explanations). Use simple language that includes ${userName}'s name when natural. Show the word happening through actions and events, never explain what it means.`}",
-  "definition": "Clear, simple definition (max 6 words)",
-  "wrongAnswers": [
-    "plausible wrong definition 1",
-    "plausible wrong definition 2", 
-    "plausible wrong definition 3"
-  ],
-  "spellingHint": "A helpful hint for spelling (max 8 words)",
-  "usageOptions": [
-    "correct usage example appropriate for ${userLevel} level",
-    "wrong usage example 1",
-    "wrong usage example 2",
-    "wrong usage example 3"
-  ]
-}
-
-Requirements:
-- Word must be appropriate for ${userLevel} level vocabulary
-- Story MUST use simple, easy-to-understand language regardless of target word complexity
-- ${userName === 'User' ? 'DO NOT include any names in the story. Use natural pronouns and terms like "someone", "a person", "they", "he/she"' : `Include ${userName}'s name naturally when it makes sense`}
-- Connect story to user's interests: ${learningGoals.join(', ') || 'general daily life'}
-- Wrong answers should be believable but clearly different
-- Usage examples should be realistic scenarios suitable for this level
-- Keep everything concise and clear
-- Respond with ONLY the JSON object, no extra text
-
-Generate the lesson now:`;
+// Get user's learning level from storage
+const getUserLevel = async () => {
+  try {
+    const DataManager = require('./DataManager').default;
+    const profile = await DataManager.getUserProfile();
+    return profile.level || 'Beginner';
+  } catch (error) {
+    console.log('⚠️ Using default level: Beginner');
+    return 'Beginner';
+  }
 };
 
-// Parse OpenAI's response into structured data
-const parseWordLesson = (content) => {
+// Get ALL previously learned words to avoid repetition
+const getPreviousWords = async () => {
   try {
-    console.log('🔍 Parsing content:', content);
+    const DataManager = require('./DataManager').default;
+    const learnedWords = await DataManager.getLearnedWords();
     
-    // Clean the content - remove any markdown formatting or extra text
-    let cleanContent = content.trim();
+    const allLearnedWords = learnedWords.map(item => item.word.toLowerCase());
     
-    // Remove markdown code blocks if present
-    cleanContent = cleanContent.replace(/```json\n?/g, '');
-    cleanContent = cleanContent.replace(/```\n?/g, '');
+    console.log(`📚 User has learned ${allLearnedWords.length} words total`);
+    console.log('🚫 Excluding these words:', allLearnedWords);
     
-    // Extract JSON from the response
-    const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('❌ No JSON found in response');
-      console.error('📄 Raw content:', content);
-      throw new Error('No valid JSON found in API response');
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    console.log('✅ Parsed JSON:', parsed);
-    
-    // Validate required fields
-    if (!parsed.word || !parsed.story || !parsed.definition) {
-      console.error('❌ Missing required fields in parsed data');
-      throw new Error('Invalid lesson structure from API');
-    }
-
-    // Ensure arrays exist and have correct length
-    if (!parsed.wrongAnswers || !Array.isArray(parsed.wrongAnswers) || parsed.wrongAnswers.length < 3) {
-      parsed.wrongAnswers = ['Wrong answer 1', 'Wrong answer 2', 'Wrong answer 3'];
-    }
-
-    if (!parsed.usageOptions || !Array.isArray(parsed.usageOptions) || parsed.usageOptions.length < 4) {
-      parsed.usageOptions = [
-        `This is how you use ${parsed.word} correctly.`,
-        'This is wrong usage 1',
-        'This is wrong usage 2',
-        'This is wrong usage 3'
-      ];
-    }
-
-    const result = {
-      targetWord: parsed.word.toLowerCase(),
-      emoji: parsed.emoji || '📚',
-      story: parsed.story,
-      definition: parsed.definition,
-      wrongAnswers: parsed.wrongAnswers.slice(0, 3),
-      spellingHint: parsed.spellingHint || 'Think about the sounds',
-      usageOptions: parsed.usageOptions.slice(0, 4),
-      // Generate step data for the learning flow
-      steps: generateStepsFromLesson(parsed)
-    };
-
-    console.log('✅ Final lesson result:', result);
-    return result;
-
+    return allLearnedWords;
   } catch (error) {
-    console.error('❌ Error parsing word lesson:', error);
-    console.error('📄 Original content:', content);
-    throw new Error(`Failed to parse lesson data: ${error.message}`);
+    console.log('⚠️ No previous words found');
+    return [];
   }
 };
 
@@ -359,24 +244,9 @@ const getFallbackLesson = async () => {
         'The courage weather was perfect today.',
         'He courage his homework before dinner.'
       ]
-    },
-    {
-      targetWord: 'wisdom',
-      emoji: '🦉',
-      story: `When ${userName} had a difficult decision to make, they asked their grandmother for advice. She listened carefully and then shared a helpful story from her own life. Her thoughtful guidance helped ${userName} see the situation more clearly.`,
-      definition: 'Good judgment and knowledge',
-      wrongAnswers: ['Lack of understanding', 'Quick decision making', 'Following others blindly'],
-      spellingHint: 'Starts with "wis", ends with "dom"',
-      usageOptions: [
-        `${userName}'s grandmother shared her wisdom about life.`,
-        'The wisdom rain fell all day.',
-        'He wisdom his lunch quickly.',
-        'They wisdom walked to school.'
-      ]
     }
   ];
 
-  // Pick a random fallback word
   const randomFallback = fallbackWords[Math.floor(Math.random() * fallbackWords.length)];
   
   const lesson = {
@@ -396,185 +266,10 @@ const getFallbackLesson = async () => {
   return lesson;
 };
 
-// Get user's learning level from storage
-const getUserLevel = async () => {
-  try {
-    const DataManager = require('./DataManager').default;
-    const profile = await DataManager.getUserProfile();
-    return profile.level || 'Beginner';
-  } catch (error) {
-    console.log('⚠️ Using default level: Beginner');
-    return 'Beginner';
-  }
-};
-
-// Get ALL previously learned words to avoid repetition
-const getPreviousWords = async () => {
-  try {
-    const DataManager = require('./DataManager').default;
-    const learnedWords = await DataManager.getLearnedWords();
-    
-    // Get ALL words the user has learned (not just last 10)
-    const allLearnedWords = learnedWords.map(item => item.word.toLowerCase());
-    
-    console.log(`📚 User has learned ${allLearnedWords.length} words total`);
-    console.log('🚫 Excluding these words:', allLearnedWords);
-    
-    return allLearnedWords;
-  } catch (error) {
-    console.log('⚠️ No previous words found');
-    return [];
-  }
-};
-
-// Generate a new word with story, meaning, and usage based on user level
-const generateWordLesson = async (userLevel = 'Beginner', previousWords = [], learningGoals = [], userName = 'User') => {
-  try {
-    const prompt = createWordGenerationPrompt(userLevel, previousWords, learningGoals, userName);
-    
-    console.log('🔑 Making API request to OpenAI...');
-    console.log('🔍 API Key length:', OPENAI_API_KEY ? OPENAI_API_KEY.length : 'undefined');
-    console.log('🔍 API Key starts with:', OPENAI_API_KEY ? OPENAI_API_KEY.substring(0, 10) + '...' : 'undefined');
-    
-    const requestBody = {
-      model: 'gpt-3.5-turbo', // Cost-effective model
-      max_tokens: 1500,
-      temperature: 0.7,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert vocabulary teacher creating engaging word lessons. Always respond with valid JSON only, no additional text.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    };
-
-    console.log('📤 Request sent to OpenAI');
-    
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    console.log('📥 Response status:', response.status);
-
-    if (!response.ok) {
-      // Get detailed error info
-      const errorData = await response.json();
-      console.error('❌ API Error Details:', errorData);
-      
-      // Handle specific errors
-      if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please try again in a moment.');
-      } else if (response.status === 401) {
-        throw new Error('Invalid API key. Please check your configuration.');
-      } else {
-        throw new Error(`API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-      }
-    }
-
-    const data = await response.json();
-    console.log('✅ Got response from OpenAI!');
-    
-    const content = data.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No content in OpenAI response');
-    }
-    
-    return parseWordLesson(content);
-    
-  } catch (error) {
-    console.error('❌ Error generating word lesson:', error.message);
-    console.error('🔍 Full error:', error);
-    throw error; // Re-throw to be handled by caller
-  }
-};
-
-// Enhanced API health check
-const checkApiHealth = async () => {
-  try {
-    console.log('🔍 Checking OpenAI API health...');
-    
-    if (!OPENAI_API_KEY || OPENAI_API_KEY === 'your-openai-api-key-here') {
-      return {
-        status: 'error',
-        message: 'API key not configured',
-        canGenerate: false
-      };
-    }
-
-    // Test with minimal request
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'Hi' }]
-      })
-    });
-
-    const data = await response.json();
-
-    if (response.status === 429) {
-      return {
-        status: 'quota_exceeded',
-        message: 'API quota exceeded. Please add credits to your OpenAI account.',
-        error: data.error,
-        canGenerate: false,
-        action: 'Add billing at https://platform.openai.com/account/billing'
-      };
-    }
-
-    if (response.status === 401) {
-      return {
-        status: 'invalid_key',
-        message: 'Invalid API key',
-        canGenerate: false,
-        action: 'Check your API key in config.js'
-      };
-    }
-
-    if (!response.ok) {
-      return {
-        status: 'error',
-        message: `API Error: ${response.status}`,
-        error: data.error,
-        canGenerate: false
-      };
-    }
-
-    return {
-      status: 'healthy',
-      message: 'API is working correctly',
-      canGenerate: true,
-      tokensUsed: data.usage?.total_tokens || 0
-    };
-
-  } catch (error) {
-    return {
-      status: 'network_error',
-      message: 'Network connection failed',
-      error: error.message,
-      canGenerate: false
-    };
-  }
-};
-
-// Enhanced main method to get a complete lesson with personalization
+// 🚀 NEW: Main method using Supabase Edge Function
 const getNewLesson = async () => {
   try {
-    console.log('🎯 Getting personalized lesson...');
+    console.log('🎯 Getting personalized lesson via Edge Function...');
     
     // Get all user data
     const [userLevel, previousWords, learningGoals, userName] = await Promise.all([
@@ -589,80 +284,136 @@ const getNewLesson = async () => {
     console.log('📝 Total learned words:', previousWords.length);
     console.log('🎯 Learning goals:', learningGoals);
     
-    const lesson = await generateWordLesson(userLevel, previousWords, learningGoals, userName);
+    // 🔥 Call the secure Edge Function instead of OpenAI directly
+    const { data, error } = await supabase.functions.invoke('generate-word-lesson', {
+      body: {
+        userLevel,
+        previousWords,
+        learningGoals,
+        userName
+      }
+    });
+    
+    if (error) {
+      console.error('❌ Edge Function error:', error);
+      throw new Error(`Edge Function failed: ${error.message}`);
+    }
+    
+    if (!data || !data.success) {
+      console.error('❌ Invalid response from Edge Function');
+      throw new Error('Invalid response from Edge Function');
+    }
+    
+    const lesson = data.lesson;
     
     // Validate lesson structure before returning
-    if (!lesson || !lesson.targetWord || !lesson.steps) {
+    if (!lesson || !lesson.targetWord) {
       console.error('❌ Invalid lesson structure, using fallback');
       return getFallbackLesson();
     }
 
-    console.log('✅ Personalized lesson generated:', lesson.targetWord);
+    console.log('✅ Lesson generated via Edge Function:', lesson.targetWord);
+    
+    if (data.fallback) {
+      console.log('⚠️ Used fallback lesson due to API issues');
+    }
+    
     return lesson;
   } catch (error) {
-    console.error('❌ Error getting new lesson:', error);
+    console.error('❌ Error getting lesson from Edge Function:', error);
+    console.log('🔄 Falling back to local fallback lesson');
     return getFallbackLesson();
   }
 };
 
-// Test the API connection with simpler request
+// Test the Edge Function connection
 const testConnection = async () => {
   try {
-    console.log('🧪 Testing OpenAI API connection...');
-    console.log('🔍 API Key check:', OPENAI_API_KEY ? 'Present' : 'Missing');
+    console.log('🧪 Testing Edge Function connection...');
     
-    if (!OPENAI_API_KEY || OPENAI_API_KEY === 'your-openai-api-key-here') {
-      throw new Error('OpenAI API key is missing or not configured');
-    }
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        max_tokens: 50,
-        messages: [{
-          role: 'user',
-          content: 'Respond with just "API connection successful"'
-        }]
-      })
+    const { data, error } = await supabase.functions.invoke('generate-word-lesson', {
+      body: {
+        userLevel: 'Beginner',
+        previousWords: [],
+        learningGoals: [],
+        userName: 'Test User'
+      }
     });
 
-    console.log('🧪 Test response status:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ API test failed:', errorData);
-      throw new Error(`API test failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+    if (error) {
+      console.error('❌ Edge Function test failed:', error);
+      return false;
     }
 
-    const data = await response.json();
-    console.log('✅ Test successful:', data);
-    return data.choices[0]?.message?.content?.includes('successful') || false;
+    if (data && data.success) {
+      console.log('✅ Edge Function test successful:', data.lesson?.targetWord);
+      return true;
+    }
+
+    return false;
   } catch (error) {
-    console.error('❌ OpenAI API connection test failed:', error.message);
+    console.error('❌ Edge Function connection test failed:', error.message);
     return false;
   }
 };
 
-// Helper method to check if API is configured
-const isApiConfigured = () => {
-  return OPENAI_API_KEY && OPENAI_API_KEY !== 'your-openai-api-key-here';
+// Check if API is configured (now checks Edge Function)
+const isApiConfigured = async () => {
+  try {
+    return await testConnection();
+  } catch (error) {
+    return false;
+  }
 };
 
 // Get API status
 const getApiStatus = () => {
   return {
-    provider: 'OpenAI',
-    isConfigured: isApiConfigured(),
-    keyPreview: OPENAI_API_KEY 
-      ? `${OPENAI_API_KEY.substring(0, 8)}...${OPENAI_API_KEY.substring(OPENAI_API_KEY.length - 4)}`
-      : 'Not configured',
+    provider: 'Supabase Edge Function + OpenAI',
+    isConfigured: true, // Edge Function handles the API key
+    security: 'API key secured in Supabase Edge Function',
     model: 'gpt-3.5-turbo'
   };
+};
+
+// Generate steps from lesson (keep existing function)
+const generateStepsFromLesson = (lesson) => {
+  const steps = {
+    1: {
+      type: 'discovery',
+      story: lesson.story,
+      options: [
+        lesson.word,
+        generateSimilarWord(lesson.word),
+        generateSimilarWord(lesson.word),
+        generateSimilarWord(lesson.word)
+      ].sort(() => Math.random() - 0.5),
+      correctAnswer: lesson.word
+    },
+    2: {
+      type: 'meaning',
+      question: `What does "${lesson.word}" mean?`,
+      options: [
+        lesson.definition,
+        ...lesson.wrongAnswers.slice(0, 3)
+      ].sort(() => Math.random() - 0.5),
+      correctAnswer: lesson.definition
+    },
+    3: {
+      type: 'spelling',
+      hint: lesson.spellingHint,
+      letters: lesson.word.toUpperCase().split('').sort(() => Math.random() - 0.5),
+      correctWord: lesson.word.toUpperCase()
+    },
+    4: {
+      type: 'usage',
+      question: `Which sentence uses "${lesson.word}" correctly?`,
+      options: lesson.usageOptions.slice(0, 4),
+      correctAnswer: lesson.usageOptions[0]
+    }
+  };
+
+  return steps;
 };
 
 // Cost tracking utility
@@ -671,16 +422,53 @@ const getUsageEstimate = () => {
     tokensPerLesson: 450,
     costPerLesson: 0.0025, // Approximate cost in USD
     lessonsWithFiveDollars: 2000,
-    message: 'Your $5 credit should last for approximately 2000 lessons!'
+    message: 'Your $5 credit should last for approximately 2000 lessons!',
+    security: '🔒 API key is now secure in Edge Function'
   };
+};
+
+// API health check (now checks Edge Function)
+const checkApiHealth = async () => {
+  try {
+    console.log('🔍 Checking Edge Function health...');
+    
+    const isWorking = await testConnection();
+    
+    if (isWorking) {
+      return {
+        status: 'healthy',
+        message: 'Edge Function is working correctly',
+        canGenerate: true,
+        security: '🔒 API key secured server-side'
+      };
+    } else {
+      return {
+        status: 'error',
+        message: 'Edge Function is not responding',
+        canGenerate: false,
+        fallback: 'Using local fallback lessons'
+      };
+    }
+  } catch (error) {
+    return {
+      status: 'network_error',
+      message: 'Network connection failed',
+      error: error.message,
+      canGenerate: false,
+      fallback: 'Using local fallback lessons'
+    };
+  }
 };
 
 // Export as an object with all methods
 const ClaudeService = {
+  // 🔥 SECURE METHODS (using Edge Function)
+  getNewLesson,
+  testConnection,
   checkApiHealth,
-  generateWordLesson,
-  createWordGenerationPrompt,
-  parseWordLesson,
+  
+  // Helper methods
+  transformLessonData,
   generateStepsFromLesson,
   generateSimilarWord,
   getFallbackLesson,
@@ -688,11 +476,14 @@ const ClaudeService = {
   getUserName,
   getUserLearningGoals,
   getPreviousWords,
-  getNewLesson,
-  testConnection,
   isApiConfigured,
   getApiStatus,
-  getUsageEstimate
+  getUsageEstimate,
+  
+  // 🚫 REMOVED INSECURE METHODS
+  // generateWordLesson, - moved to Edge Function
+  // createWordGenerationPrompt, - moved to Edge Function
+  // parseWordLesson, - moved to Edge Function
 };
 
 export default ClaudeService;

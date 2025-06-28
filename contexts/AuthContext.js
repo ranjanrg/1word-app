@@ -1,20 +1,9 @@
+// contexts/AuthContext.js - PRODUCTION VERSION
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { supabase } from '../supabase.config';
 import * as SecureStore from 'expo-secure-store';
 import DataManager from '../utils/DataManager';
-
-// 🆕 Conditional Google Sign-In import (only for development builds)
-let GoogleSignin = null;
-let statusCodes = null;
-
-try {
-  const googleSignInModule = require('@react-native-google-signin/google-signin');
-  GoogleSignin = googleSignInModule.GoogleSignin;
-  statusCodes = googleSignInModule.statusCodes;
-  console.log('✅ Google Sign-In module loaded');
-} catch (error) {
-  console.log('⚠️ Google Sign-In not available (Expo Go environment)');
-}
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 
 // Storage keys
 const AUTH_STORAGE_KEYS = {
@@ -44,7 +33,7 @@ const initialState = {
   isFirstTime: true
 };
 
-// Auth reducer
+// Auth reducer (same as before)
 const authReducer = (prevState, action) => {
   switch (action.type) {
     case AUTH_ACTIONS.RESTORE_SESSION:
@@ -114,7 +103,7 @@ const authReducer = (prevState, action) => {
   }
 };
 
-// Storage helpers
+// Storage helpers (same as before)
 const storage = {
   getItem: async (key) => {
     try {
@@ -171,7 +160,7 @@ export const AuthProvider = ({ children }) => {
 
   // Configure Google Sign-In
   useEffect(() => {
-    if (GoogleSignin) {
+    try {
       GoogleSignin.configure({
         webClientId: '280064203476-5v7vflvcb7kpn6vqlvkj46oq0qia76uq.apps.googleusercontent.com',
         offlineAccess: true,
@@ -179,6 +168,8 @@ export const AuthProvider = ({ children }) => {
         forceCodeForRefreshToken: true,
       });
       console.log('🔧 Google Sign-In configured');
+    } catch (error) {
+      console.error('❌ Google Sign-In configuration failed:', error);
     }
   }, []);
 
@@ -190,12 +181,10 @@ export const AuthProvider = ({ children }) => {
         const assessmentData = JSON.parse(pendingData);
         console.log('📊 Applying pending assessment data:', assessmentData);
         
-        // Save assessment data to storage
         await storage.setItem(AUTH_STORAGE_KEYS.USER_LEVEL, assessmentData.userLevel);
         await storage.setItem('familiarWords', JSON.stringify(assessmentData.selectedWords));
         await storage.setItem('learningGoals', JSON.stringify(assessmentData.learningGoals));
         
-        // Clear pending data
         await storage.removeItem('pendingAssessmentData');
         
         console.log('✅ Assessment data applied successfully');
@@ -217,7 +206,6 @@ export const AuthProvider = ({ children }) => {
     let mounted = true;
     let authSubscription = null;
 
-    // Get initial session
     const getInitialSession = async () => {
       try {
         console.log('🔄 Checking for existing Supabase session...');
@@ -274,19 +262,16 @@ export const AuthProvider = ({ children }) => {
 
         console.log('🔄 Handling user session for:', user.email);
 
-        // Tell DataManager about the current user
         await DataManager.handleAuthChange(user.id, {
           fullName: user.user_metadata?.name || '',
           email: user.email,
           username: user.email?.split('@')[0] || 'User'
         });
 
-        // Get stored user profile and level
         const storedProfile = await storage.getItem(AUTH_STORAGE_KEYS.USER_PROFILE);
         const storedLevel = await storage.getItem(AUTH_STORAGE_KEYS.USER_LEVEL);
         const isFirstTime = await storage.getItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME);
         
-        // Create user data object
         let userData = null;
         try {
           userData = storedProfile ? JSON.parse(storedProfile) : null;
@@ -295,7 +280,6 @@ export const AuthProvider = ({ children }) => {
           userData = null;
         }
 
-        // Create default user data if none exists
         if (!userData) {
           userData = {
             id: user.id,
@@ -356,7 +340,6 @@ export const AuthProvider = ({ children }) => {
       return subscription;
     };
 
-    // Initialize
     const initialize = async () => {
       await getInitialSession();
       if (mounted) {
@@ -374,99 +357,38 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // Google Sign-In Function
+  // PRODUCTION Google Sign-In Function
   const signInWithGoogle = async () => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: true });
       
-      // Check if real Google Sign-In is available
-      if (GoogleSignin && statusCodes) {
-        console.log('🔐 Starting real Google sign in...');
-        
-        // Check if device supports Google Play Services
-        await GoogleSignin.hasPlayServices();
-        
-        // Sign in with Google
-        const userInfo = await GoogleSignin.signIn();
-        console.log('✅ Google sign-in successful!', userInfo);
-        console.log('📧 User email:', userInfo?.user?.email || userInfo?.data?.user?.email);
-        
-        // Sign in to Supabase with Google token
-        const { data, error } = await supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: userInfo.idToken || userInfo.data?.idToken,
-        });
-        
-        if (error) {
-          console.error('❌ Supabase Google auth error:', error);
-          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-          return { success: false, error: 'Google sign-in failed. Please try again.' };
-        }
-        
-        if (data.user) {
-          console.log('✅ Supabase Google auth successful!');
-          return { success: true };
-        } else {
-          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-          return { success: false, error: 'Google sign-in failed. Please try again.' };
-        }
-      } else {
-        // Fallback to mock Google Sign-In for Expo Go
-        console.log('🧪 Using mock Google sign-in (Expo Go)...');
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Mock user data
-        const mockGoogleUser = {
-          id: 'mock-' + 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-          }),
-          email: 'testuser@gmail.com',
-          user_metadata: {
-            name: 'Test User',
-            picture: 'https://example.com/avatar.jpg'
-          },
-          created_at: new Date().toISOString(),
-          app_metadata: {
-            provider: 'google'
-          }
-        };
-        
-        // Tell DataManager about the mock user
-        await DataManager.handleAuthChange(mockGoogleUser.id, {
-          fullName: mockGoogleUser.user_metadata.name,
-          email: mockGoogleUser.email,
-          username: mockGoogleUser.email.split('@')[0]
-        });
-        
-        // Create mock user data
-        const userData = {
-          id: mockGoogleUser.id,
-          name: mockGoogleUser.user_metadata.name,
-          email: mockGoogleUser.email,
-          joinDate: mockGoogleUser.created_at,
-          authMethod: 'google_mock'
-        };
-
-        // Apply any pending assessment data
-        const updatedUserData = await applyPendingAssessmentData(userData);
-        
-        // Save user data locally
-        await storage.setItem(AUTH_STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedUserData));
-        await storage.setItem(AUTH_STORAGE_KEYS.USER_LEVEL, updatedUserData.userLevel || 'Beginner');
-        await storage.setItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME, 'false');
-        
-        dispatch({
-          type: AUTH_ACTIONS.SIGN_IN,
-          user: mockGoogleUser,
-          userData: updatedUserData,
-          userLevel: updatedUserData.userLevel || 'Beginner'
-        });
-        
-        console.log('✅ Mock Google sign-in successful!');
+      console.log('🔐 Starting Google sign in...');
+      
+      // Check if device supports Google Play Services
+      await GoogleSignin.hasPlayServices();
+      
+      // Sign in with Google
+      const userInfo = await GoogleSignin.signIn();
+      console.log('✅ Google sign-in successful!', userInfo);
+      
+      // Sign in to Supabase with Google token
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: userInfo.idToken || userInfo.data?.idToken,
+      });
+      
+      if (error) {
+        console.error('❌ Supabase Google auth error:', error);
+        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
+        return { success: false, error: 'Google sign-in failed. Please try again.' };
+      }
+      
+      if (data.user) {
+        console.log('✅ Supabase Google auth successful!');
         return { success: true };
+      } else {
+        dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
+        return { success: false, error: 'Google sign-in failed. Please try again.' };
       }
       
     } catch (error) {
@@ -474,11 +396,11 @@ export const AuthProvider = ({ children }) => {
       
       let errorMessage = 'Google sign-in failed';
       
-      if (statusCodes && error.code === statusCodes.SIGN_IN_CANCELLED) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         errorMessage = 'Sign-in was cancelled';
-      } else if (statusCodes && error.code === statusCodes.IN_PROGRESS) {
+      } else if (error.code === statusCodes.IN_PROGRESS) {
         errorMessage = 'Sign-in is already in progress';
-      } else if (statusCodes && error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         errorMessage = 'Google Play Services not available';
       }
       
@@ -492,14 +414,11 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('🚪 Signing out...');
       
-      // Sign out from Google if available
-      if (GoogleSignin) {
-        try {
-          await GoogleSignin.signOut();
-          console.log('✅ Google sign out successful');
-        } catch (googleError) {
-          console.log('ℹ️ No Google session to sign out from');
-        }
+      try {
+        await GoogleSignin.signOut();
+        console.log('✅ Google sign out successful');
+      } catch (googleError) {
+        console.log('ℹ️ No Google session to sign out from');
       }
       
       const { error } = await supabase.auth.signOut();
@@ -509,7 +428,6 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: error.message };
       }
       
-      // Clear local storage
       await storage.removeItem(AUTH_STORAGE_KEYS.USER_PROFILE);
       await storage.removeItem(AUTH_STORAGE_KEYS.USER_LEVEL);
       
@@ -525,8 +443,7 @@ export const AuthProvider = ({ children }) => {
   // Set guest mode
   const setGuest = async () => {
     try {
-      console.log('👤 DataManager: Current user set to: null');
-      console.log('✅ User logged out or guest mode');
+      console.log('👤 Setting guest mode');
       
       DataManager.handleAuthChange('guest_user');
       
@@ -576,7 +493,7 @@ export const AuthProvider = ({ children }) => {
     userLevel: state.userLevel,
     isFirstTime: state.isFirstTime,
     
-    // Actions (Google-only)
+    // Actions
     signInWithGoogle,
     signOut,
     setGuest,
