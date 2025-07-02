@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.oneword.app"
+      "bundleIdentifier": "com.ranjan2741.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.oneword.app"
+      "package": "com.ranjan2741.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
