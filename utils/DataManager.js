@@ -1,4 +1,5 @@
 import { supabase } from '../supabase.config.js';
+import * as SecureStore from 'expo-secure-store';
 
 // Current user management
 let currentUserId = null;
@@ -61,7 +62,7 @@ class DataManager {
     }
   }
 
-  // Initialize fresh user data for new users (Supabase version)
+  // Initialize fresh user data for new users (Supabase version with assessment integration)
   static async initializeUserData(userId, fullName, email, username = null) {
     try {
       console.log('🔄 Initializing fresh data for new user:', { userId, fullName, email, username });
@@ -69,13 +70,28 @@ class DataManager {
       const displayName = fullName || username || (email ? email.split('@')[0] : 'User');
       const userUsername = username || (email ? email.split('@')[0] : 'User');
       
+      // ✅ NEW: Check for pending assessment data
+      let assessmentData = null;
+      try {
+        const pendingData = await SecureStore.getItemAsync('pendingAssessmentData');
+        if (pendingData) {
+          assessmentData = JSON.parse(pendingData);
+          console.log('📊 Found pending assessment data:', assessmentData);
+        }
+      } catch (error) {
+        console.log('⚠️ No pending assessment data found');
+      }
+      
       const freshProfile = {
         ...DEFAULT_PROFILE,
         fullName: fullName || '',
         username: userUsername,
         email: email,
         joinDate: new Date().toISOString(),
-        isNewUser: true
+        isNewUser: true,
+        // ✅ Use assessment level if available, otherwise default
+        level: assessmentData?.userLevel || DEFAULT_PROFILE.level,
+        learningGoals: assessmentData?.learningGoals || DEFAULT_PROFILE.learningGoals
       };
 
       const freshProgress = {
@@ -91,8 +107,8 @@ class DataManager {
           full_name: freshProfile.fullName,
           username: freshProfile.username,
           email: freshProfile.email,
-          level: freshProfile.level,
-          learning_goals: freshProfile.learningGoals,
+          level: freshProfile.level,  // ✅ Now uses assessment level!
+          learning_goals: freshProfile.learningGoals,  // ✅ Now uses assessment goals!
           total_words: freshProfile.totalWords,
           current_streak: freshProfile.streak,
           is_new_user: freshProfile.isNewUser
@@ -115,7 +131,17 @@ class DataManager {
         throw progressError;
       }
       
-      console.log('✅ Fresh user data initialized in Supabase:', fullName);
+      // ✅ Clean up pending data after successful initialization
+      if (assessmentData) {
+        try {
+          await SecureStore.deleteItemAsync('pendingAssessmentData');
+          console.log('🧹 Cleaned up pending assessment data');
+        } catch (cleanupError) {
+          console.log('⚠️ Could not clean up pending data:', cleanupError);
+        }
+      }
+      
+      console.log('✅ Fresh user data initialized in Supabase:', fullName, 'Level:', freshProfile.level);
       return { profile: freshProfile, progress: freshProgress };
     } catch (error) {
       console.error('❌ Error initializing user data:', error);

@@ -290,6 +290,8 @@ export const AuthProvider = ({ children }) => {
           };
         }
 
+        userData = await applyPendingAssessmentData(userData);
+
         dispatch({
           type: AUTH_ACTIONS.RESTORE_SESSION,
           user: user,
