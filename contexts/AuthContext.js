@@ -1,4 +1,4 @@
-// contexts/AuthContext.js - PRODUCTION VERSION
+// contexts/AuthContext.js - FINAL FIXED VERSION
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { supabase } from '../supabase.config';
 import * as SecureStore from 'expo-secure-store';
@@ -201,11 +201,36 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // 🔥 Helper function to check if user exists in your database (ONLY used in signInWithGoogle)
+  const checkUserExistsInDatabase = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error('❌ Error checking user existence:', error);
+        return false;
+      }
+      
+      const exists = !!data;
+      console.log('🔍 User exists in database:', exists);
+      return exists;
+      
+    } catch (error) {
+      console.error('❌ Error checking user existence:', error);
+      return false;
+    }
+  };
+
   // Initialize auth state and listen for auth changes
   useEffect(() => {
     let mounted = true;
     let authSubscription = null;
 
+    // 🔥 FIXED: getInitialSession - NO database checks
     const getInitialSession = async () => {
       try {
         console.log('🔄 Checking for existing Supabase session...');
@@ -219,6 +244,7 @@ export const AuthProvider = ({ children }) => {
         if (mounted) {
           if (session?.user) {
             console.log('✅ Found existing session for:', session.user.email);
+            // 🔥 REMOVED: No database check here - just handle the session
             await handleUserSession(session.user);
           } else {
             console.log('ℹ️ No existing session found');
@@ -316,7 +342,7 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Listen for auth changes
+    // 🔥 FIXED: setupAuthListener - NO database checks
     const setupAuthListener = () => {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('🔔 Auth state changed:', event);
@@ -326,7 +352,10 @@ export const AuthProvider = ({ children }) => {
         try {
           if (event === 'SIGNED_IN' && session?.user) {
             console.log('✅ User signed in:', session.user.email);
+            
+            // 🔥 REMOVED: No database check here - let signInWithGoogle handle it
             await handleUserSession(session.user);
+            
           } else if (event === 'SIGNED_OUT') {
             console.log('✅ User logged out or guest mode');
             DataManager.handleAuthChange('guest_user');
@@ -359,7 +388,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // PRODUCTION Google Sign-In Function
+  // 🔥 FIXED: Google Sign-In Function with proper database check
   const signInWithGoogle = async () => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: true });
@@ -387,6 +416,38 @@ export const AuthProvider = ({ children }) => {
       
       if (data.user) {
         console.log('✅ Supabase Google auth successful!');
+        
+        // 🔥 NEW: Check if user just completed assessment FIRST
+        const pendingAssessment = await storage.getItem('pendingAssessmentData');
+        console.log('🔍 DEBUG - pendingAssessmentData:', pendingAssessment);
+        
+        if (pendingAssessment) {
+          // User just completed assessment - allow account creation
+          console.log('🎯 New user with assessment data - allowing account creation');
+          return { success: true };
+        }
+        
+        // 🔥 EXISTING: Check if user exists for returning users
+        const userExists = await checkUserExistsInDatabase(data.user.id);
+        
+        if (!userExists) {
+          // Existing user trying to sign in but not in database
+          console.log('⚠️ User authenticated but not in database - redirect to assessment');
+          
+          // Sign them out of Supabase
+          await supabase.auth.signOut();
+          await GoogleSignin.signOut();
+          
+          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
+          
+          return { 
+            success: false, 
+            error: 'Account not found. Please create an account first.',
+            requiresAssessment: true 
+          };
+        }
+        
+        console.log('✅ User exists in database - proceeding with login');
         return { success: true };
       } else {
         dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
@@ -404,6 +465,9 @@ export const AuthProvider = ({ children }) => {
         errorMessage = 'Sign-in is already in progress';
       } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         errorMessage = 'Google Play Services not available';
+      } else if (error.code === statusCodes.DEVELOPER_ERROR) {
+        errorMessage = 'Developer error - please contact support';
+        console.error('🔥 DEVELOPER_ERROR - Check SHA-1 certificates!', error);
       }
       
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });

@@ -12,8 +12,27 @@ const Login = () => {
   const handleGoogleSignIn = async () => {
     try {
       const result = await signInWithGoogle();
+      
       if (!result.success) {
-        Alert.alert('Sign-In Failed', result.error || 'Google Sign-In failed. Please try again.');
+        if (result.requiresAssessment) {
+          // Better UX message - user thinks they have account but don't
+          Alert.alert(
+            'Account Not Found',
+            'You don\'t have an account yet. Please create an account first. ',
+            [
+              {
+                text: 'Create Account',
+                onPress: () => navigation.navigate('AuthWelcome') // Go to welcome/assessment flow
+              },
+              {
+                text: 'Cancel',
+                style: 'cancel'
+              }
+            ]
+          );
+        } else {
+          Alert.alert('Sign-In Failed', result.error || 'Google Sign-In failed. Please try again.');
+        }
       }
       // If successful, navigation will happen automatically via AuthContext
     } catch (error) {
