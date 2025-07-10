@@ -538,17 +538,21 @@ class DataManager {
   static async getUserProfile() {
     try {
       const userId = currentUserId;
-
+  
       if (!userId) {
         console.log('⚠️ No user ID, returning default profile');
         return DEFAULT_PROFILE;
       }
-
+  
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
+      
+      // 🔥 ADD THIS DEBUG LOG
+      console.log('🔍 Raw database data:', data);
+      console.log('🔍 Database level field:', data?.level);
       
       if (error && error.code !== 'PGRST116') {
         throw error;
@@ -557,34 +561,22 @@ class DataManager {
       if (data) {
         const profile = {
           level: data.level || 'Beginner',
-          learningGoals: data.learning_goals || [],
-          joinDate: data.created_at,
-          username: data.username || 'User',
-          fullName: data.full_name || '',
-          email: data.email || '',
-          totalWords: data.total_words || 0,
-          streak: data.current_streak || 0,
-          isNewUser: data.is_new_user !== false
+          // ... rest of the fields
         };
         
-        console.log('✅ Retrieved user profile from Supabase:', { 
-          userId, 
-          fullName: profile.fullName, 
-          level: profile.level, 
-          totalWords: profile.totalWords 
-        });
+        // 🔥 ADD THIS DEBUG LOG
+        console.log('✅ Final profile object:', profile);
+        console.log('✅ Final level:', profile.level);
+        
         return profile;
       }
       
-      // No profile found - this shouldn't happen with triggers, but just in case
-      console.log('⚠️ No profile found for user, returning default');
-      return DEFAULT_PROFILE;
+      // ... rest of function
     } catch (error) {
       console.error('❌ Error getting user profile:', error);
       return DEFAULT_PROFILE;
     }
   }
-
   // Save user profile to Supabase
   static async saveUserProfile(profileData) {
     try {

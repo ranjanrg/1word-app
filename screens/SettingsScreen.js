@@ -48,6 +48,9 @@ const SettingsScreen = ({ navigation }) => {
     signOut
   } = authHook;
 
+  console.log('🔍 SETTINGS - AuthContext userLevel:', userLevel);
+  console.log('🔍 SETTINGS - Full auth state:', { userName, userEmail, userLevel });
+
   // Animation values
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(30));

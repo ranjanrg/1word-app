@@ -7,47 +7,19 @@ const { width, height } = Dimensions.get('window');
 
 const Login = () => {
   const navigation = useNavigation();
-  const { signInWithGoogle, setGuest, isLoading } = useAuth();
+  const { signInWithGoogle, isLoading } = useAuth();
 
   const handleGoogleSignIn = async () => {
     try {
       const result = await signInWithGoogle();
       
       if (!result.success) {
-        if (result.requiresAssessment) {
-          // Better UX message - user thinks they have account but don't
-          Alert.alert(
-            'Account Not Found',
-            'You don\'t have an account yet. Please create an account first. ',
-            [
-              {
-                text: 'Create Account',
-                onPress: () => navigation.navigate('AuthWelcome') // Go to welcome/assessment flow
-              },
-              {
-                text: 'Cancel',
-                style: 'cancel'
-              }
-            ]
-          );
-        } else {
-          Alert.alert('Sign-In Failed', result.error || 'Google Sign-In failed. Please try again.');
-        }
+        Alert.alert('Sign-In Failed', result.error || 'Google Sign-In failed. Please try again.');
       }
       // If successful, navigation will happen automatically via AuthContext
     } catch (error) {
       console.error('Google Sign-In error:', error);
       Alert.alert('Error', 'Sign-In failed. Please try again.');
-    }
-  };
-
-  const handleContinueAsGuest = async () => {
-    try {
-      await setGuest();
-      // Navigation will happen automatically
-    } catch (error) {
-      console.error('Guest mode error:', error);
-      Alert.alert('Error', 'Failed to continue as guest. Please try again.');
     }
   };
 

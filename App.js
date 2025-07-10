@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import SplashScreen from './screens/SplashScreen';
 import AuthWelcomeScreen from './screens/AuthWelcomeScreen';
 import AssessmentScreen from './screens/AssessmentScreen';
-import LoginScreen from './screens/LoginScreen';
+import Login from './screens/LoginScreen';
 import LearningGoalsScreen from './screens/LearningGoalsScreen';
 import MainScreen from './screens/MainScreen';
 import LearnWordScreen from './screens/LearnWordScreen';
@@ -34,7 +34,7 @@ const AuthStack = () => (
     <Stack.Screen name="AuthWelcome" component={AuthWelcomeScreen} />
     <Stack.Screen name="Assessment" component={AssessmentScreen} />
     <Stack.Screen name="LearningGoals" component={LearningGoalsScreen} />
-    <Stack.Screen name="Login" component={LoginScreen} />
+    <Stack.Screen name="Login" component={Login} />
   </Stack.Navigator>
 );
 

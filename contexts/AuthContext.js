@@ -1,4 +1,4 @@
-// contexts/AuthContext.js - FINAL FIXED VERSION
+// contexts/AuthContext.js - FIXED VERSION
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { supabase } from '../supabase.config';
 import * as SecureStore from 'expo-secure-store';
@@ -103,7 +103,7 @@ const authReducer = (prevState, action) => {
   }
 };
 
-// Storage helpers (same as before)
+// Storage helpers
 const storage = {
   getItem: async (key) => {
     try {
@@ -162,7 +162,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     try {
       GoogleSignin.configure({
-        webClientId: '280064203476-5v7vflvcb7kpn6vqlvkj46oq0qia76uq.apps.googleusercontent.com',
+        webClientId: '280064203476-5v7vflvcb7kpn6vqlvkj46oq0qia76uq.apps.googleusercontent.com', // Your Web Client ID
         offlineAccess: true,
         hostedDomain: '',
         forceCodeForRefreshToken: true,
@@ -201,27 +201,78 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 🔥 Helper function to check if user exists in your database (ONLY used in signInWithGoogle)
-  const checkUserExistsInDatabase = async (userId) => {
+  // 🔥 FIXED: Create or get user profile - no pre-check
+  const createOrGetUserProfile = async (user) => {
     try {
-      const { data, error } = await supabase
+      console.log('🔄 Creating or getting user profile for:', user.email);
+      
+      // First, try to get existing profile
+      const { data: existingProfile, error: selectError } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('id', userId)
+        .select('*')
+        .eq('id', user.id)
         .single();
       
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error('❌ Error checking user existence:', error);
-        return false;
+      if (existingProfile) {
+        console.log('✅ Found existing profile for:', user.email);
+        return existingProfile;
       }
       
-      const exists = !!data;
-      console.log('🔍 User exists in database:', exists);
-      return exists;
-      
+      // If no existing profile, create new one
+      if (selectError?.code === 'PGRST116') { // No rows found
+        console.log('🆕 Creating new profile for:', user.email);
+        
+        // Get pending assessment data
+        const pendingData = await storage.getItem('pendingAssessmentData');
+        let assessmentData = null;
+        
+        if (pendingData) {
+          try {
+            assessmentData = JSON.parse(pendingData);
+            console.log('📊 Found pending assessment data');
+          } catch (error) {
+            console.error('❌ Error parsing pending assessment data:', error);
+          }
+        }
+        
+        // Create profile with assessment data if available
+        const newProfile = {
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+          username: user.email?.split('@')[0] || 'User',
+          level: assessmentData?.userLevel || 'Beginner',
+          learning_goals: assessmentData?.learningGoals || [],
+          total_words: 0,
+          current_streak: 0,
+          is_new_user: !assessmentData // If they have assessment data, they're not "new"
+        };
+        
+        const { data: createdProfile, error: insertError } = await supabase
+          .from('profiles')
+          .insert(newProfile)
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.error('❌ Error creating profile:', insertError);
+          throw insertError;
+        }
+        
+        // Clean up pending assessment data
+        if (assessmentData) {
+          await storage.removeItem('pendingAssessmentData');
+          console.log('🧹 Cleaned up pending assessment data');
+        }
+        
+        console.log('✅ Created new profile for:', user.email);
+        return createdProfile;
+      } else {
+        throw selectError;
+      }
     } catch (error) {
-      console.error('❌ Error checking user existence:', error);
-      return false;
+      console.error('❌ Error in createOrGetUserProfile:', error);
+      throw error;
     }
   };
 
@@ -230,7 +281,7 @@ export const AuthProvider = ({ children }) => {
     let mounted = true;
     let authSubscription = null;
 
-    // 🔥 FIXED: getInitialSession - NO database checks
+    // Get initial session
     const getInitialSession = async () => {
       try {
         console.log('🔄 Checking for existing Supabase session...');
@@ -244,7 +295,6 @@ export const AuthProvider = ({ children }) => {
         if (mounted) {
           if (session?.user) {
             console.log('✅ Found existing session for:', session.user.email);
-            // 🔥 REMOVED: No database check here - just handle the session
             await handleUserSession(session.user);
           } else {
             console.log('ℹ️ No existing session found');
@@ -288,12 +338,14 @@ export const AuthProvider = ({ children }) => {
 
         console.log('🔄 Handling user session for:', user.email);
 
+        // Set up DataManager for this user
         await DataManager.handleAuthChange(user.id, {
           fullName: user.user_metadata?.name || '',
           email: user.email,
           username: user.email?.split('@')[0] || 'User'
         });
 
+        // Get user data from local storage first
         const storedProfile = await storage.getItem(AUTH_STORAGE_KEYS.USER_PROFILE);
         const storedLevel = await storage.getItem(AUTH_STORAGE_KEYS.USER_LEVEL);
         const isFirstTime = await storage.getItem(AUTH_STORAGE_KEYS.IS_FIRST_TIME);
@@ -316,13 +368,21 @@ export const AuthProvider = ({ children }) => {
           };
         }
 
+        console.log('🔍 AUTHCONTEXT - userData before assessment:', userData);
+        console.log('🔍 AUTHCONTEXT - storedLevel:', storedLevel);
+        // Apply pending assessment data if available
         userData = await applyPendingAssessmentData(userData);
+
+        console.log('🔍 AUTHCONTEXT - userData after assessment:', userData);
+        console.log('🔍 AUTHCONTEXT - final userLevel for dispatch:', storedLevel || userData.userLevel || 'Beginner');
+        
+        const databaseProfile = await DataManager.getUserProfile();
 
         dispatch({
           type: AUTH_ACTIONS.RESTORE_SESSION,
           user: user,
           userData: userData,
-          userLevel: storedLevel || 'Beginner',
+          userLevel: databaseProfile.level || storedLevel || 'Beginner', // ← Database first!
           isFirstTime: isFirstTime === null,
           isGuest: false
         });
@@ -342,7 +402,7 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // 🔥 FIXED: setupAuthListener - NO database checks
+    // Setup auth listener
     const setupAuthListener = () => {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('🔔 Auth state changed:', event);
@@ -352,12 +412,9 @@ export const AuthProvider = ({ children }) => {
         try {
           if (event === 'SIGNED_IN' && session?.user) {
             console.log('✅ User signed in:', session.user.email);
-            
-            // 🔥 REMOVED: No database check here - let signInWithGoogle handle it
             await handleUserSession(session.user);
-            
           } else if (event === 'SIGNED_OUT') {
-            console.log('✅ User logged out or guest mode');
+            console.log('✅ User logged out');
             DataManager.handleAuthChange('guest_user');
             dispatch({ type: AUTH_ACTIONS.SIGN_OUT });
           } else if (event === 'TOKEN_REFRESHED' && session) {
@@ -388,7 +445,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // 🔥 FIXED: Google Sign-In Function with proper database check
+  // 🔥 FIXED: Simplified Google Sign-In
   const signInWithGoogle = async () => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: true });
@@ -417,37 +474,15 @@ export const AuthProvider = ({ children }) => {
       if (data.user) {
         console.log('✅ Supabase Google auth successful!');
         
-        // 🔥 NEW: Check if user just completed assessment FIRST
-        const pendingAssessment = await storage.getItem('pendingAssessmentData');
-        console.log('🔍 DEBUG - pendingAssessmentData:', pendingAssessment);
-        
-        if (pendingAssessment) {
-          // User just completed assessment - allow account creation
-          console.log('🎯 New user with assessment data - allowing account creation');
-          return { success: true };
+        // Create or get user profile (this handles both new and existing users)
+        try {
+          await createOrGetUserProfile(data.user);
+          console.log('✅ User profile ready');
+        } catch (profileError) {
+          console.error('❌ Error setting up user profile:', profileError);
+          // Don't fail the sign-in for profile errors
         }
         
-        // 🔥 EXISTING: Check if user exists for returning users
-        const userExists = await checkUserExistsInDatabase(data.user.id);
-        
-        if (!userExists) {
-          // Existing user trying to sign in but not in database
-          console.log('⚠️ User authenticated but not in database - redirect to assessment');
-          
-          // Sign them out of Supabase
-          await supabase.auth.signOut();
-          await GoogleSignin.signOut();
-          
-          dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
-          
-          return { 
-            success: false, 
-            error: 'Account not found. Please create an account first.',
-            requiresAssessment: true 
-          };
-        }
-        
-        console.log('✅ User exists in database - proceeding with login');
         return { success: true };
       } else {
         dispatch({ type: AUTH_ACTIONS.SET_LOADING, isLoading: false });
@@ -475,7 +510,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Sign out user
+  // Rest of the methods remain the same...
   const signOut = async () => {
     try {
       console.log('🚪 Signing out...');
@@ -506,7 +541,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Set guest mode
   const setGuest = async () => {
     try {
       console.log('👤 Setting guest mode');
@@ -522,7 +556,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Update user data
   const updateUser = async (newUserData, newUserLevel) => {
     try {
       const updatedUserData = { 
@@ -562,7 +595,6 @@ export const AuthProvider = ({ children }) => {
     // Actions
     signInWithGoogle,
     signOut,
-    setGuest,
     updateUser,
     
     // Computed values
